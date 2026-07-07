@@ -1,0 +1,23 @@
+{
+  "lexicon": 1,
+  "id": "com.example.interactionView",
+  "description": "View shape for interactions.",
+  "defs": {
+    "main": {
+      "type": "object",
+      "description": "Input/output view shape for interactions.",
+      "required": ["subject"],
+      "properties": {
+        "subject": {
+          "type": "ref",
+          "ref": "com.example.post",
+          "description": "The post being interacted with."
+        },
+        "count": {
+          "type": "integer",
+          "description": "Interaction count."
+        }
+      }
+    }
+  }
+}

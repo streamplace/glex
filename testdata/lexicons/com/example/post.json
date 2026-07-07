@@ -1,0 +1,46 @@
+{
+  "lexicon": 1,
+  "id": "com.example.post",
+  "description": "A simple record with blob, link, and bytes fields for testing glex codegen.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A test record.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["text", "createdAt"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxGraphemes": 300,
+            "description": "The body text of the post."
+          },
+          "image": {
+            "type": "blob",
+            "description": "An optional image attachment."
+          },
+          "replyTo": {
+            "type": "ref",
+            "ref": "com.example.post",
+            "description": "A link to another post."
+          },
+          "rawData": {
+            "type": "bytes",
+            "description": "Optional raw binary data."
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Optional tags."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Creation timestamp."
+          }
+        }
+      }
+    }
+  }
+}

@@ -6,8 +6,10 @@ require (
 	github.com/bluesky-social/indigo v0.0.0-20260629160527-dfe5578fd537
 	github.com/hyphacoop/go-dasl v0.8.0
 	github.com/ipfs/go-cid v0.6.1
+	github.com/urfave/cli/v3 v3.4.1
 	github.com/whyrusleeping/cbor-gen v0.3.1
 	golang.org/x/net v0.52.0
+	golang.org/x/tools v0.15.0
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da
 )
 
@@ -41,6 +43,7 @@ require (
 	gitlab.com/yawning/secp256k1-voi v0.0.0-20230925100816-f2616030848b // indirect
 	gitlab.com/yawning/tuplehash v0.0.0-20230713102510-df83abbf9a02 // indirect
 	golang.org/x/crypto v0.50.0 // indirect
+	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect

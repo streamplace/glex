@@ -1,0 +1,35 @@
+{
+  "lexicon": 1,
+  "id": "com.example.getInteractions",
+  "description": "Get the interaction count for a post.",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Get the interaction count for a post.",
+      "parameters": {
+        "type": "params",
+        "required": ["uri"],
+        "properties": {
+          "uri": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "The post URI."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Optional limit."
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "ref",
+          "ref": "com.example.interactionView"
+        }
+      }
+    }
+  }
+}

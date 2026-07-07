@@ -1,0 +1,36 @@
+{
+  "lexicon": 1,
+  "id": "com.example.createLike",
+  "description": "Create a like on a post.",
+  "defs": {
+    "main": {
+      "type": "procedure",
+      "description": "Create a like on a post.",
+      "input": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["uri"],
+          "properties": {
+            "uri": {
+              "type": "string",
+              "format": "at-uri",
+              "description": "The post URI to like."
+            },
+            "note": {
+              "type": "string",
+              "description": "Optional note."
+            }
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "ref",
+          "ref": "com.example.interactionView"
+        }
+      }
+    }
+  }
+}
