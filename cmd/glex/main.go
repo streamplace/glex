@@ -214,7 +214,11 @@ func walkJSON(dir string) ([]string, error) {
 
 // collectCatalog builds a lexicon.Catalog from all local schema files.
 func collectCatalog(cmd *cli.Command) (lexicon.Catalog, error) {
-	paths, err := collectPaths(cmd)
+	// Build catalog from ALL lexicons in the lexicons-dir, not just the
+	// explicit args. This ensures externalRefType can resolve cross-namespace
+	// references (e.g. app.bsky.richtext.facet referenced from games.*).
+	lexiconsDir := cmd.String("lexicons-dir")
+	paths, err := walkJSON(lexiconsDir)
 	if err != nil {
 		return nil, err
 	}
