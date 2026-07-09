@@ -63,6 +63,18 @@ func main() {
 						Name:  "legacy-mode",
 						Usage: "use the legacy (indigo lexutil-compatible) codegen profile",
 					},
+					&cli.StringSliceFlag{
+						Name:  "pkg-name-override",
+						Usage: "override a computed package name (format: computedName=realName, e.g. placestream=streamplace). Can be repeated.",
+					},
+					&cli.StringSliceFlag{
+						Name:  "extra-import",
+						Usage: "add a cross-package import mapping (format: nsidPkgName=`alias \"import/path\"`). Can be repeated.",
+					},
+					&cli.StringSliceFlag{
+						Name:  "external-type-mapping",
+						Usage: "map an NSID prefix to a Go import spec (format: prefix=`alias \"import/path\"`, e.g. com.atproto.=`comatproto \"github.com/bluesky-social/indigo/api/atproto\"`). Can be repeated.",
+					},
 					&cli.BoolFlag{
 						Name:  "no-imports-tidy",
 						Usage: "skip cleanup of go imports in written output",
@@ -100,10 +112,52 @@ func runBuild(ctx context.Context, cmd *cli.Command) error {
 	var cfg *lexgen.GenConfig
 	if cmd.Bool("legacy-mode") {
 		cfg = lexgen.LegacyConfig()
+		// In legacy mode, the runtime is indigo's lexutil, not glexrt.
+		// But if runtime-import is explicitly set, use it (for the shim case).
+		if runtimeImport != "github.com/streamplace/glex/runtime" {
+			cfg.RuntimeImport = runtimeImport
+			cfg.DaslMode = true
+		}
 	} else {
 		cfg = lexgen.GlexConfig(runtimeImport)
 	}
 	cfg.RuntimeAlias = cmd.String("runtime-alias")
+
+	// Apply package name overrides (key=value pairs)
+	for _, kv := range cmd.StringSlice("pkg-name-override") {
+		parts := strings.SplitN(kv, "=", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid --pkg-name-override %q (expected key=value)", kv)
+		}
+		if cfg.PkgNameOverrides == nil {
+			cfg.PkgNameOverrides = map[string]string{}
+		}
+		cfg.PkgNameOverrides[parts[0]] = parts[1]
+	}
+
+	// Apply extra imports (key="alias \"import/path\"")
+	for _, kv := range cmd.StringSlice("extra-import") {
+		parts := strings.SplitN(kv, "=", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid --extra-import %q (expected key=value)", kv)
+		}
+		if cfg.ExtraImports == nil {
+			cfg.ExtraImports = map[string]string{}
+		}
+		cfg.ExtraImports[parts[0]] = parts[1]
+	}
+
+	// Apply external type mappings (prefix="alias \"import/path\"")
+	for _, kv := range cmd.StringSlice("external-type-mapping") {
+		parts := strings.SplitN(kv, "=", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid --external-type-mapping %q (expected prefix=value)", kv)
+		}
+		if cfg.ExternalTypeMappings == nil {
+			cfg.ExternalTypeMappings = map[string]string{}
+		}
+		cfg.ExternalTypeMappings[parts[0]] = parts[1]
+	}
 
 	anyFailures := false
 	for _, p := range filePaths {
@@ -239,7 +293,10 @@ func collectCatalog(cmd *cli.Command) (lexicon.Catalog, error) {
 	if err != nil {
 		return nil, err
 	}
-	cat := lexicon.NewBaseCatalog()
+	// Build a catalog. We can't use lexicon.NewBaseCatalog directly because
+	// indigo forks disagree on whether it returns a value or pointer (and
+	// Resolve has a pointer receiver). Instead, use a tiny inline wrapper.
+	cat := &inlineCatalog{schemas: map[string]*lexicon.Schema{}}
 	for _, p := range paths {
 		b, err := os.ReadFile(p)
 		if err != nil {
@@ -254,6 +311,45 @@ func collectCatalog(cmd *cli.Command) (lexicon.Catalog, error) {
 		}
 	}
 	return cat, nil
+}
+
+// inlineCatalog is a minimal lexicon.Catalog implementation that avoids the
+// NewBaseCatalog value-vs-pointer discrepancy between indigo forks.
+type inlineCatalog struct {
+	schemas map[string]*lexicon.Schema
+}
+
+func (c *inlineCatalog) Resolve(ref string) (*lexicon.Schema, error) {
+	if ref == "" {
+		return nil, fmt.Errorf("tried to resolve empty string name")
+	}
+	if !strings.Contains(ref, "#") {
+		ref = ref + "#main"
+	}
+	s, ok := c.schemas[ref]
+	if !ok {
+		return nil, fmt.Errorf("schema not found in catalog: %s", ref)
+	}
+	return s, nil
+}
+
+func (c *inlineCatalog) AddSchemaFile(sf lexicon.SchemaFile) error {
+	if err := sf.FinishParse(); err != nil {
+		return err
+	}
+	if err := sf.CheckSchema(); err != nil {
+		return err
+	}
+	base := sf.ID
+	for frag, def := range sf.Defs {
+		name := base + "#" + frag
+		s := &lexicon.Schema{
+			ID:  name,
+			Def: def.Inner,
+		}
+		c.schemas[name] = s
+	}
+	return nil
 }
 
 // init registers the lexicon catalog type for the schema parser.
