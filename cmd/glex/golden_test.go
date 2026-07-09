@@ -39,7 +39,7 @@ func TestGoldenCodegen(t *testing.T) {
 		}
 	}
 
-	cfg := lexgen.GlexConfig("github.com/streamplace/glex/runtime")
+	cfg := lexgen.NewGenConfig("github.com/streamplace/glex/testdata/gen")
 
 	for _, p := range paths {
 		t.Run(filepath.Base(p), func(t *testing.T) {

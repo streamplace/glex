@@ -7,8 +7,6 @@ import (
 
 	"github.com/bluesky-social/indigo/atproto/lexicon"
 	"github.com/bluesky-social/indigo/atproto/syntax"
-
-	"golang.org/x/net/publicsuffix"
 )
 
 func defType(sd *lexicon.SchemaDef) (string, error) {
@@ -114,43 +112,41 @@ func isCompoundDef(sd *lexicon.SchemaDef) bool {
 	}
 }
 
+// nsidPkgName computes the Go package name for an NSID. The NSID authority is
+// a reversed domain (e.g. "repo.atproto.com" for "com.atproto.repo"). The
+// last two labels of the authority are the registered domain (e.g.
+// "atproto.com"); reversing them gives the package name (e.g. "comatproto").
 func nsidPkgName(nsid syntax.NSID) string {
-	domain := strings.ToLower(nsid.Authority())
-	reg, err := publicsuffix.EffectiveTLDPlusOne(domain)
-	if err != nil {
-		return "FAIL"
-	}
-	parts := strings.Split(reg, ".")
-	slices.Reverse(parts)
-
-	return strings.Join(parts, "")
+	auth := strings.ToLower(nsid.Authority())
+	parts := strings.Split(auth, ".")
+	regParts := parts[len(parts)-2:]
+	slices.Reverse(regParts)
+	return strings.Join(regParts, "")
 }
 
+// nsidBaseName computes the Go type name for an NSID. It takes the subdomain
+// labels (everything before the registered domain), reverses them, appends
+// the NSID name, and Title-cases each part. E.g. "com.atproto.repo.strongRef"
+// → authority "repo.atproto.com" → subdomain ["repo"] → "RepoStrongRef".
 func nsidBaseName(nsid syntax.NSID) string {
-	domain := strings.ToLower(nsid.Authority())
-	reg, err := publicsuffix.EffectiveTLDPlusOne(domain)
-	if err != nil {
-		return "FAIL"
+	auth := strings.ToLower(nsid.Authority())
+	parts := strings.Split(auth, ".")
+	subParts := parts[:len(parts)-2]
+	slices.Reverse(subParts)
+	subParts = append(subParts, nsid.Name())
+	for i := range subParts {
+		subParts[i] = strings.Title(subParts[i])
 	}
-	rem := domain[0 : len(domain)-len(reg)]
-	parts := strings.Split(rem, ".")
-	slices.Reverse(parts)
-	parts = append(parts, nsid.Name())
-	for i := range parts {
-		parts[i] = strings.Title(parts[i])
-	}
-	return strings.Join(parts, "")
+	return strings.Join(subParts, "")
 }
 
+// nsidFileName computes the output filename for an NSID (lowercase, no
+// extension). Same as nsidBaseName but all-lowercase.
 func nsidFileName(nsid syntax.NSID) string {
-	domain := strings.ToLower(nsid.Authority())
-	reg, err := publicsuffix.EffectiveTLDPlusOne(domain)
-	if err != nil {
-		return "FAIL"
-	}
-	rem := domain[0 : len(domain)-len(reg)]
-	parts := strings.Split(rem, ".")
-	slices.Reverse(parts)
-	parts = append(parts, nsid.Name())
-	return strings.Join(parts, "")
+	auth := strings.ToLower(nsid.Authority())
+	parts := strings.Split(auth, ".")
+	subParts := parts[:len(parts)-2]
+	slices.Reverse(subParts)
+	subParts = append(subParts, strings.ToLower(nsid.Name()))
+	return strings.Join(subParts, "")
 }

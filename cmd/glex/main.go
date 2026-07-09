@@ -50,30 +50,8 @@ func main() {
 						Sources: cli.EnvVars("OUTPUT_DIR"),
 					},
 					&cli.StringFlag{
-						Name:  "runtime-import",
-						Usage: "Go import path of the glex runtime package (default: github.com/streamplace/glex/runtime)",
-						Value: "github.com/streamplace/glex/runtime",
-					},
-					&cli.StringFlag{
-						Name:  "runtime-alias",
-						Usage: "import alias for the runtime package in generated code (default: glexrt)",
-						Value: "glexrt",
-					},
-					&cli.BoolFlag{
-						Name:  "legacy-mode",
-						Usage: "use the legacy (indigo lexutil-compatible) codegen profile",
-					},
-					&cli.StringSliceFlag{
-						Name:  "pkg-name-override",
-						Usage: "override a computed package name (format: computedName=realName, e.g. placestream=streamplace). Can be repeated.",
-					},
-					&cli.StringSliceFlag{
-						Name:  "extra-import",
-						Usage: "add a cross-package import mapping (format: nsidPkgName=`alias \"import/path\"`). Can be repeated.",
-					},
-					&cli.StringSliceFlag{
-						Name:  "external-type-mapping",
-						Usage: "map an NSID prefix to a Go import spec (format: prefix=`alias \"import/path\"`, e.g. com.atproto.=`comatproto \"github.com/bluesky-social/indigo/api/atproto\"`). Can be repeated.",
+						Name:  "module-path",
+						Usage: "Go module path that generated packages will be imported under (e.g. github.com/example/myproj/gen)",
 					},
 					&cli.BoolFlag{
 						Name:  "no-imports-tidy",
@@ -104,60 +82,7 @@ func runBuild(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	runtimeImport := cmd.String("runtime-import")
-	if runtimeImport == "" {
-		runtimeImport = "github.com/streamplace/glex/runtime"
-	}
-
-	var cfg *lexgen.GenConfig
-	if cmd.Bool("legacy-mode") {
-		cfg = lexgen.LegacyConfig()
-		// In legacy mode, the runtime is indigo's lexutil, not glexrt.
-		// But if runtime-import is explicitly set, use it (for the shim case).
-		if runtimeImport != "github.com/streamplace/glex/runtime" {
-			cfg.RuntimeImport = runtimeImport
-			cfg.DaslMode = true
-		}
-	} else {
-		cfg = lexgen.GlexConfig(runtimeImport)
-	}
-	cfg.RuntimeAlias = cmd.String("runtime-alias")
-
-	// Apply package name overrides (key=value pairs)
-	for _, kv := range cmd.StringSlice("pkg-name-override") {
-		parts := strings.SplitN(kv, "=", 2)
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid --pkg-name-override %q (expected key=value)", kv)
-		}
-		if cfg.PkgNameOverrides == nil {
-			cfg.PkgNameOverrides = map[string]string{}
-		}
-		cfg.PkgNameOverrides[parts[0]] = parts[1]
-	}
-
-	// Apply extra imports (key="alias \"import/path\"")
-	for _, kv := range cmd.StringSlice("extra-import") {
-		parts := strings.SplitN(kv, "=", 2)
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid --extra-import %q (expected key=value)", kv)
-		}
-		if cfg.ExtraImports == nil {
-			cfg.ExtraImports = map[string]string{}
-		}
-		cfg.ExtraImports[parts[0]] = parts[1]
-	}
-
-	// Apply external type mappings (prefix="alias \"import/path\"")
-	for _, kv := range cmd.StringSlice("external-type-mapping") {
-		parts := strings.SplitN(kv, "=", 2)
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid --external-type-mapping %q (expected prefix=value)", kv)
-		}
-		if cfg.ExternalTypeMappings == nil {
-			cfg.ExternalTypeMappings = map[string]string{}
-		}
-		cfg.ExternalTypeMappings[parts[0]] = parts[1]
-	}
+	cfg := lexgen.NewGenConfig(cmd.String("module-path"))
 
 	anyFailures := false
 	for _, p := range filePaths {
