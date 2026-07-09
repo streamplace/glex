@@ -129,16 +129,6 @@ func (gen *CodeGenerator) fieldType(fname string, def *lexicon.SchemaDef, option
 			ptr = "*"
 		}
 		return ptr + t, nil
-	case lexicon.SchemaUnion:
-		// Unions as struct fields: use the union type name. The union struct
-		// is emitted by writeUnion when the definition is encountered during
-		// flattening. The name follows the same convention: baseName + _FieldName.
-		name := gen.baseName() + "_" + strings.Title(fname)
-		ptr := ""
-		if optional || gen.Config.LegacyMode {
-			ptr = "*"
-		}
-		return ptr + name, nil
 	default:
 		return "", fmt.Errorf("unhandled schema type in struct field: %T", def.Inner)
 	}
@@ -258,9 +248,38 @@ func (gen *CodeGenerator) writeStruct(ft *FlatType, obj *lexicon.SchemaObject) e
 	for _, fname := range keys {
 		field := obj.Properties[fname]
 		optional := !isRequired(obj.Required, fname)
-		t, err := gen.fieldType(fname, &field, optional)
-		if err != nil {
-			return err
+
+		// Handle object/union fields and arrays of them directly, since
+		// fieldType doesn't have the path context to compute the right name.
+		// This matches the original lexgen behavior.
+		var t string
+		switch v := field.Inner.(type) {
+		case lexicon.SchemaObject, lexicon.SchemaUnion:
+			t = name + "_" + strings.Title(fname)
+			if optional || gen.Config.LegacyMode {
+				t = "*" + t
+			}
+		case lexicon.SchemaArray:
+			switch v.Items.Inner.(type) {
+			case lexicon.SchemaObject, lexicon.SchemaUnion:
+				elemPtr := ""
+				if gen.Config.LegacyMode {
+					elemPtr = "*"
+				}
+				t = fmt.Sprintf("[]%s%s_%s_Elem", elemPtr, name, strings.Title(fname))
+			default:
+				var err error
+				t, err = gen.fieldType(fname, &field, optional)
+				if err != nil {
+					return err
+				}
+			}
+		default:
+			var err error
+			t, err = gen.fieldType(fname, &field, optional)
+			if err != nil {
+				return err
+			}
 		}
 
 		omitempty := ""
