@@ -68,7 +68,7 @@ func (gen *CodeGenerator) fieldType(fname string, def *lexicon.SchemaDef, option
 				}
 				return "interface{}", nil
 			}
-			return "*" + gen.rtAlias() + ".LexiconTypeDecoder", nil
+			return "*" + gen.regAlias() + ".LexiconTypeDecoder", nil
 		case "json-raw-message":
 			if optional {
 				return "*json.RawMessage", nil
@@ -392,7 +392,9 @@ func (gen *CodeGenerator) writeUnion(ft *FlatType, union *lexicon.SchemaUnion) e
 	}
 	fmt.Fprintf(gen.Out, "}\n\n")
 
-	rt := gen.rtAlias()
+	// In legacy mode, union dispatch uses lexutil's TypeExtract/CborTypeExtractReader.
+	// In clean mode, it uses the glex runtime.
+	rt := gen.regAlias()
 
 	// ... then MarshalJSON
 	fmt.Fprintf(gen.Out, "func (t *%s) MarshalJSON() ([]byte, error) {\n", name)
@@ -486,7 +488,8 @@ func (gen *CodeGenerator) writeUnion(ft *FlatType, union *lexicon.SchemaUnion) e
 
 func (gen *CodeGenerator) writeEndpoint(ft *FlatType, desc string, params *lexicon.SchemaParams, output, input *lexicon.SchemaBody, isProcedure bool) error {
 	name := gen.baseName()
-	rt := gen.rtAlias()
+	// In legacy mode, XRPC client/dispatch uses lexutil. In clean mode, the glex runtime.
+	rt := gen.regAlias()
 
 	fmt.Fprintf(gen.Out, "// %s calls the XRPC method \"%s\".\n", name, gen.Lex.NSID)
 	if desc != "" && !gen.Config.LegacyMode {

@@ -184,6 +184,17 @@ func (gen *CodeGenerator) rtAlias() string {
 	return "lexutil"
 }
 
+// regAlias returns the alias for the type registry (RegisterType). In legacy
+// mode, types must register into indigo's lexutil registry so that
+// lexutil.CborDecodeValue (used by the firehose) can find them. In clean
+// (non-legacy) mode, they register into the glex runtime.
+func (gen *CodeGenerator) regAlias() string {
+	if gen.Config.LegacyMode {
+		return "lexutil"
+	}
+	return gen.rtAlias()
+}
+
 func (gen *CodeGenerator) deps() map[string]bool {
 	d := map[string]bool{
 		"\"context\"":       true,
@@ -192,17 +203,18 @@ func (gen *CodeGenerator) deps() map[string]bool {
 		"\"bytes\"":         true,
 		"\"encoding/json\"": true,
 	}
-	// In legacy mode, import indigo's lexutil. In DaslMode, import the glex
-	// runtime instead.
+	// In legacy mode, import indigo's lexutil (for RegisterType and, when
+	// not in DaslMode, for the value types). In DaslMode, also import the
+	// glex runtime (for the CBOR adapter helpers and value types).
+	if gen.Config.LegacyMode {
+		d["lexutil \"github.com/bluesky-social/indigo/lex/util\""] = true
+	}
 	if gen.Config.DaslMode {
 		if spec := gen.Config.runtimeImportSpec(); spec != "" {
 			d[spec] = true
 		}
-		d["cbg \"github.com/whyrusleeping/cbor-gen\""] = true
-	} else {
-		d["lexutil \"github.com/bluesky-social/indigo/lex/util\""] = true
-		d["cbg \"github.com/whyrusleeping/cbor-gen\""] = true
 	}
+	d["cbg \"github.com/whyrusleeping/cbor-gen\""] = true
 
 	for ext := range gen.Lex.ExternalRefs {
 		// Check configurable external type mappings first.
@@ -252,7 +264,7 @@ func (gen *CodeGenerator) WriteType(ft *FlatType) error {
 	case lexicon.SchemaRecord:
 		if gen.Config.RegisterLexiconTypeID {
 			fmt.Fprintf(gen.Out, "func init() {\n")
-			fmt.Fprintf(gen.Out, "\t%s.RegisterType(\"%s\", &%s{})\n", gen.rtAlias(), gen.Lex.NSID, gen.baseName())
+			fmt.Fprintf(gen.Out, "\t%s.RegisterType(\"%s\", &%s{})\n", gen.regAlias(), gen.Lex.NSID, gen.baseName())
 			fmt.Fprintf(gen.Out, "}\n\n")
 		}
 		// HACK: insert record-level description into object if nil
@@ -277,7 +289,7 @@ func (gen *CodeGenerator) WriteType(ft *FlatType) error {
 	case lexicon.SchemaObject:
 		if gen.Config.RegisterLexiconTypeID && ft.DefName == "main" && len(ft.Path) == 0 {
 			fmt.Fprintf(gen.Out, "func init() {\n")
-			fmt.Fprintf(gen.Out, "\t%s.RegisterType(\"%s#main\", &%s{})\n", gen.rtAlias(), gen.Lex.NSID, gen.baseName())
+			fmt.Fprintf(gen.Out, "\t%s.RegisterType(\"%s#main\", &%s{})\n", gen.regAlias(), gen.Lex.NSID, gen.baseName())
 			fmt.Fprintf(gen.Out, "}\n\n")
 		}
 		if err := gen.writeStruct(ft, &v); err != nil {
