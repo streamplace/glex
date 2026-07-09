@@ -57,6 +57,10 @@ func main() {
 						Name:  "no-imports-tidy",
 						Usage: "skip cleanup of go imports in written output",
 					},
+					&cli.StringFlag{
+						Name:  "gen-server",
+						Usage: "generate server handler stubs (stubs.go) into the given package name (e.g. spxrpc)",
+					},
 				},
 				Action: runBuild,
 			},
@@ -97,7 +101,77 @@ func runBuild(ctx context.Context, cmd *cli.Command) error {
 	if anyFailures {
 		return fmt.Errorf("some codegen failed")
 	}
+
+	// Generate server handler stubs if requested
+	if serverPkg := cmd.String("gen-server"); serverPkg != "" {
+		if err := genServerStubs(cmd, cat, cfg, serverPkg); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+func genServerStubs(cmd *cli.Command, cat lexicon.Catalog, cfg *lexgen.GenConfig, pkgName string) error {
+	// Flatten all lexicons for server stub generation
+	paths, err := collectPaths(cmd)
+	if err != nil {
+		return err
+	}
+	var allFlat []*lexgen.FlatLexicon
+	for _, p := range paths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return fmt.Errorf("failed to read lexicon (%s): %w", p, err)
+		}
+		var sf lexicon.SchemaFile
+		if err := json.Unmarshal(b, &sf); err != nil {
+			return fmt.Errorf("failed to parse lexicon (%s): %w", p, err)
+		}
+		if err := sf.FinishParse(); err != nil {
+			return fmt.Errorf("failed to finalize lexicon (%s): %w", p, err)
+		}
+		flat, err := lexgen.FlattenSchemaFile(&sf)
+		if err != nil {
+			return fmt.Errorf("failed to flatten lexicon (%s): %w", p, err)
+		}
+		allFlat = append(allFlat, flat)
+	}
+
+	buf := new(bytes.Buffer)
+	fileCfg := *cfg
+	gen := lexgen.CodeGenerator{
+		Config: &fileCfg,
+		Cat:    cat,
+		Out:    buf,
+	}
+	if err := gen.WriteServerStubs(allFlat, pkgName); err != nil {
+		return fmt.Errorf("failed to generate server stubs: %w", err)
+	}
+
+	outPath := path.Join(cmd.String("output-dir"), pkgName, "stubs.go")
+	if err := os.MkdirAll(path.Dir(outPath), 0755); err != nil {
+		return err
+	}
+
+	if !cmd.Bool("no-imports-tidy") {
+		fmtOpts := imports.Options{
+			Comments:  true,
+			TabIndent: false,
+			TabWidth:  4,
+		}
+		formatted, err := imports.Process(outPath, buf.Bytes(), &fmtOpts)
+		if err != nil {
+			return fmt.Errorf("failed to format server stubs: %w", err)
+		}
+		return os.WriteFile(outPath, formatted, 0644)
+	}
+
+	formatted, err := format.Source(buf.Bytes())
+	if err != nil {
+		return fmt.Errorf("failed to format server stubs: %w", err)
+	}
+	return os.WriteFile(outPath, formatted, 0644)
 }
 
 func genFile(ctx context.Context, cmd *cli.Command, cat lexicon.Catalog, cfg *lexgen.GenConfig, p string) error {
