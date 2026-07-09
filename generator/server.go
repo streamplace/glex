@@ -84,6 +84,7 @@ func (gen *CodeGenerator) WriteServerStubs(allFlat []*FlatLexicon, pkgName strin
 			}
 			fname := idToTitle(fl.NSID.String())
 			tname := nsidBaseName(fl.NSID)
+			gen.Lex = fl // Set Lex so externalRefType can access gen.Lex.NSID
 			if err := gen.writeRPCHandler(pf, fl, main, fname, tname, impname); err != nil {
 				return err
 			}
