@@ -129,12 +129,41 @@ func (gen *CodeGenerator) fieldType(fname string, def *lexicon.SchemaDef, option
 			ptr = "*"
 		}
 		return ptr + t, nil
+	case lexicon.SchemaUnion:
+		// Unions as struct fields: use the union type name. The union struct
+		// is emitted by writeUnion when the definition is encountered during
+		// flattening. The name follows the same convention: baseName + _FieldName.
+		name := gen.baseName() + "_" + strings.Title(fname)
+		ptr := ""
+		if optional || gen.Config.LegacyMode {
+			ptr = "*"
+		}
+		return ptr + name, nil
 	default:
 		return "", fmt.Errorf("unhandled schema type in struct field: %T", def.Inner)
 	}
 }
 
 func (gen *CodeGenerator) externalRefType(ref string) (string, error) {
+	// Check configurable external type mappings first — these don't need
+	// catalog resolution since the import spec is provided directly.
+	for prefix := range gen.Config.ExternalTypeMappings {
+		if strings.HasPrefix(ref, prefix) {
+			parts := strings.SplitN(ref, "#", 3)
+			if len(parts) > 2 {
+				return "", fmt.Errorf("failed to parse external ref: %s", ref)
+			}
+			nsid, err := syntax.ParseNSID(parts[0])
+			if err != nil {
+				return "", fmt.Errorf("failed to parse external ref NSID (%s): %w", ref, err)
+			}
+			if len(parts) == 1 || parts[1] == "main" {
+				return fmt.Sprintf("%s.%s", nsidPkgName(nsid), nsidBaseName(nsid)), nil
+			}
+			return fmt.Sprintf("%s.%s_%s", nsidPkgName(nsid), nsidBaseName(nsid), strings.Title(parts[1])), nil
+		}
+	}
+
 	s, err := gen.Cat.Resolve(ref)
 	if err != nil {
 		return "", fmt.Errorf("could not resolve lexicon reference (%s): %w", ref, err)
