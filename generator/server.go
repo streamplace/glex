@@ -114,27 +114,38 @@ func (gen *CodeGenerator) writeRPCHandler(pf func(string, ...any), fl *FlatLexic
 	paramtypes := []string{"ctx context.Context"}
 	params := []string{"ctx"}
 
-	if mainDef.Type == "query" {
-		// Parse query parameters
-		var query *lexicon.SchemaQuery
-		switch v := schema.Inner.(type) {
-		case lexicon.SchemaQuery:
-			query = &v
-		}
+	var query *lexicon.SchemaQuery
+	var proc *lexicon.SchemaProcedure
+	switch v := schema.Inner.(type) {
+	case lexicon.SchemaQuery:
+		query = &v
+	case lexicon.SchemaProcedure:
+		proc = &v
+	}
+
+	if mainDef.Type == "query" || mainDef.Type == "procedure" {
+		// Parse query parameters for both queries and procedures (procedures
+		// can have query params too, e.g. place.stream.playback.whep)
+		var schemaParams *lexicon.SchemaParams
 		if query != nil && query.Parameters != nil {
+			schemaParams = query.Parameters
+		} else if proc != nil && proc.Parameters != nil {
+			schemaParams = proc.Parameters
+		}
+		if schemaParams != nil {
 			required := map[string]bool{}
-			for _, r := range query.Parameters.Required {
+			for _, r := range schemaParams.Required {
 				required[r] = true
 			}
 			// Sort param names for deterministic output
-			paramNames := make([]string, 0, len(query.Parameters.Properties))
-			for k := range query.Parameters.Properties {
+			paramNames := make([]string, 0, len(schemaParams.Properties))
+			for k := range schemaParams.Properties {
 				paramNames = append(paramNames, k)
 			}
 			sort.Strings(paramNames)
 
 			for _, k := range paramNames {
-				t := query.Parameters.Properties[k]
+				t := schemaParams.Properties[k]
 				switch v := t.Inner.(type) {
 				case lexicon.SchemaString:
 					params = append(params, k)
@@ -196,13 +207,10 @@ func (gen *CodeGenerator) writeRPCHandler(pf func(string, ...any), fl *FlatLexic
 				}
 			}
 		}
-	} else if mainDef.Type == "procedure" {
+	}
+	// Parse procedure input body (in addition to any query params above)
+	if mainDef.Type == "procedure" {
 		// Parse input body
-		var proc *lexicon.SchemaProcedure
-		switch v := schema.Inner.(type) {
-		case lexicon.SchemaProcedure:
-			proc = &v
-		}
 		if proc != nil && proc.Input != nil {
 			intname := tname + "_Input"
 			if impname != "" {
@@ -226,14 +234,6 @@ func (gen *CodeGenerator) writeRPCHandler(pf func(string, ...any), fl *FlatLexic
 	// Determine output type
 	assign := "handleErr"
 	returndef := "error"
-	var proc *lexicon.SchemaProcedure
-	var query *lexicon.SchemaQuery
-	switch v := schema.Inner.(type) {
-	case lexicon.SchemaProcedure:
-		proc = &v
-	case lexicon.SchemaQuery:
-		query = &v
-	}
 
 	var output *lexicon.SchemaBody
 	if query != nil && query.Output != nil {
