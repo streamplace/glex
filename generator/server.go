@@ -223,10 +223,11 @@ func (gen *CodeGenerator) writeRPCHandler(pf func(string, ...any), fl *FlatLexic
 				paramtypes = append(paramtypes, "body *"+intname)
 				params = append(params, "&body")
 			default:
-				// Non-JSON input: pass as io.Reader
+				// Non-JSON input: pass as io.Reader + contentType
 				pf("\tbody := c.Request().Body\n")
-				paramtypes = append(paramtypes, "r io.Reader")
-				params = append(params, "body")
+				pf("\tcontentType := c.Request().Header.Get(\"Content-Type\")\n")
+				paramtypes = append(paramtypes, "r io.Reader", "contentType string")
+				params = append(params, "body", "contentType")
 			}
 		}
 	}
