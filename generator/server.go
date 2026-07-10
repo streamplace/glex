@@ -143,12 +143,12 @@ func (gen *CodeGenerator) writeRPCHandler(pf func(string, ...any), fl *FlatLexic
 				case lexicon.SchemaInteger:
 					params = append(params, k)
 					if !required[k] {
-						paramtypes = append(paramtypes, k+" *int")
-						pf("\tvar %s *int\n", k)
+						// Optional integer: use int with default 0 (matching old indigo behavior)
+						paramtypes = append(paramtypes, k+" int")
+						pf("\t%s := 0\n", k)
 						pf("\tif p := c.QueryParam(\"%s\"); p != \"\" {\n", k)
-						pf("\t\t%s_val, err := strconv.Atoi(p)\n", k)
-						pf("\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n")
-						pf("\t\t%s = &%s_val\n\t}\n", k, k)
+						pf("\t\tvar err error\n\t\t%s, err = strconv.Atoi(p)\n", k)
+						pf("\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n")
 					} else if v.Default != nil {
 						paramtypes = append(paramtypes, k+" int")
 						pf("\tvar %s int\n", k)
@@ -164,12 +164,12 @@ func (gen *CodeGenerator) writeRPCHandler(pf func(string, ...any), fl *FlatLexic
 				case lexicon.SchemaBoolean:
 					params = append(params, k)
 					if !required[k] {
-						paramtypes = append(paramtypes, k+" *bool")
-						pf("\tvar %s *bool\n", k)
+						// Optional boolean: use bool with default false
+						paramtypes = append(paramtypes, k+" bool")
+						pf("\t%s := false\n", k)
 						pf("\tif p := c.QueryParam(\"%s\"); p != \"\" {\n", k)
-						pf("\t\t%s_val, err := strconv.ParseBool(p)\n", k)
-						pf("\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n")
-						pf("\t\t%s = &%s_val\n\t}\n", k, k)
+						pf("\t\tvar err error\n\t\t%s, err = strconv.ParseBool(p)\n", k)
+						pf("\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n")
 					} else if v.Default != nil {
 						paramtypes = append(paramtypes, k+" bool")
 						pf("\tvar %s bool\n", k)
