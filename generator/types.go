@@ -157,14 +157,15 @@ func (gen *CodeGenerator) writeStruct(ft *FlatType, obj *lexicon.SchemaObject) e
 	typeConst := ""
 	fmt.Fprintf(gen.Out, "type %s struct {\n", name)
 
-	// emit $type field
+	// emit $type field. omitempty so an unset $type is absent from output
+	// rather than an invalid `"$type": ""` on the wire.
 	if _, ok := obj.Properties["$type"]; !ok {
 		hasType = true
 		typeConst = gen.Lex.NSID.String()
 		if ft.DefName != "main" {
 			typeConst = gen.Lex.NSID.String() + "#" + ft.DefName
 		}
-		fmt.Fprintf(gen.Out, "\tLexiconTypeID string `json:\"$type\"`\n")
+		fmt.Fprintf(gen.Out, "\tLexiconTypeID string `json:\"$type,omitempty\"`\n")
 	}
 
 	// iterate in sorted order for deterministic output
@@ -224,7 +225,18 @@ func (gen *CodeGenerator) writeStruct(ft *FlatType, obj *lexicon.SchemaObject) e
 	}
 	fmt.Fprintf(gen.Out, "}\n\n")
 
-	gen.writeCBORAdapter(name, hasType, typeConst)
+	// Records and standalone main objects are the $type-mandatory,
+	// registry-registered types; stamp $type on their JSON output the same
+	// way the CBOR adapter does, so callers can't emit one without it.
+	stampJSON := false
+	switch ft.Schema.Inner.(type) {
+	case lexicon.SchemaRecord:
+		stampJSON = true
+	case lexicon.SchemaObject:
+		stampJSON = ft.DefName == "main" && len(ft.Path) == 0
+	}
+
+	gen.writeCBORAdapter(name, hasType, typeConst, stampJSON)
 
 	return nil
 }
@@ -234,12 +246,21 @@ func (gen *CodeGenerator) writeStruct(ft *FlatType, obj *lexicon.SchemaObject) e
 // repo/carstore/MST layer while serializing as canonical DAG-CBOR through
 // go-dasl. It also emits the pointer-receiver RecordTypeID method that makes
 // *T (and only *T, never a bare T) satisfy the runtime's sealed Record
-// interface.
-func (gen *CodeGenerator) writeCBORAdapter(name string, hasType bool, typeConst string) {
+// interface, and — for $type-mandatory types (stampJSON) — a MarshalJSON
+// that stamps $type the same way MarshalCBOR does.
+func (gen *CodeGenerator) writeCBORAdapter(name string, hasType bool, typeConst string, stampJSON bool) {
 	rt := gen.rtAlias()
 	if hasType {
 		fmt.Fprintf(gen.Out, "// RecordTypeID implements %s.Record.\n", rt)
 		fmt.Fprintf(gen.Out, "func (t *%s) RecordTypeID() string { return %q }\n\n", name, typeConst)
+	}
+	if hasType && stampJSON {
+		fmt.Fprintf(gen.Out, "// MarshalJSON stamps the $type field, like MarshalCBOR does.\n")
+		fmt.Fprintf(gen.Out, "func (t *%s) MarshalJSON() ([]byte, error) {\n", name)
+		fmt.Fprintf(gen.Out, "\tt.LexiconTypeID = %q\n", typeConst)
+		fmt.Fprintf(gen.Out, "\ttype alias %s\n", name)
+		fmt.Fprintf(gen.Out, "\treturn json.Marshal((*alias)(t))\n")
+		fmt.Fprintf(gen.Out, "}\n\n")
 	}
 	fmt.Fprintf(gen.Out, "func (t *%s) MarshalCBOR(w io.Writer) error {\n", name)
 	fmt.Fprintf(gen.Out, "\tif t == nil {\n")

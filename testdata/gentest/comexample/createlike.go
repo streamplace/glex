@@ -13,7 +13,7 @@ import (
 )
 
 type CreateLike_Input struct {
-	LexiconTypeID string `json:"$type"`
+	LexiconTypeID string `json:"$type,omitempty"`
 	// note: Optional note.
 	Note *string `json:"note,omitempty"`
 	// uri: The post URI to like.

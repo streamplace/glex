@@ -2,6 +2,7 @@ package comexample_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"testing"
 
 	"github.com/hyphacoop/go-dasl/drisl"
@@ -94,5 +95,51 @@ func TestDecodeUnknownType(t *testing.T) {
 	_, err = glex.CborDecodeValue(enc)
 	if err == nil {
 		t.Fatal("expected ErrUnrecognizedType")
+	}
+}
+
+// TestJSONTypeStamping locks the $type-on-JSON contract: records (and
+// standalone main objects) stamp their $type on json.Marshal without the
+// caller setting LexiconTypeID, while input/output types with an unset
+// LexiconTypeID omit $type entirely — never an invalid `"$type": ""`.
+func TestJSONTypeStamping(t *testing.T) {
+	post := &comexample.Post{Text: "stamp me", CreatedAt: "2024-01-01T00:00:00Z"}
+	bs, err := json.Marshal(post)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(bs, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["$type"] != "com.example.post" {
+		t.Errorf("record $type: got %v, want com.example.post", m["$type"])
+	}
+
+	view := &comexample.InteractionView{Subject: comexample.Post{Text: "s", CreatedAt: "2024-01-01T00:00:00Z"}}
+	bs, err = json.Marshal(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = map[string]any{}
+	if err := json.Unmarshal(bs, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["$type"] != "com.example.interactionView" {
+		t.Errorf("main-object $type: got %v, want com.example.interactionView", m["$type"])
+	}
+
+	// An endpoint input with unset LexiconTypeID must omit $type, not emit "".
+	in := &comexample.CreateLike_Input{Uri: "at://did:plc:x/com.example.post/1"}
+	bs, err = json.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = map[string]any{}
+	if err := json.Unmarshal(bs, &m); err != nil {
+		t.Fatal(err)
+	}
+	if _, present := m["$type"]; present {
+		t.Errorf("input $type should be omitted when unset, got %v", m["$type"])
 	}
 }

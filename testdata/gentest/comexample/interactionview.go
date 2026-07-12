@@ -5,6 +5,7 @@
 package comexample
 
 import (
+	"encoding/json"
 	"io"
 
 	glex "github.com/streamplace/glex/runtime"
@@ -17,7 +18,7 @@ func init() {
 
 // Input/output view shape for interactions.
 type InteractionView struct {
-	LexiconTypeID string `json:"$type"`
+	LexiconTypeID string `json:"$type,omitempty"`
 	// count: Interaction count.
 	Count *int64 `json:"count,omitempty"`
 	// subject: The post being interacted with.
@@ -26,6 +27,13 @@ type InteractionView struct {
 
 // RecordTypeID implements glex.Record.
 func (t *InteractionView) RecordTypeID() string { return "com.example.interactionView" }
+
+// MarshalJSON stamps the $type field, like MarshalCBOR does.
+func (t *InteractionView) MarshalJSON() ([]byte, error) {
+	t.LexiconTypeID = "com.example.interactionView"
+	type alias InteractionView
+	return json.Marshal((*alias)(t))
+}
 
 func (t *InteractionView) MarshalCBOR(w io.Writer) error {
 	if t == nil {

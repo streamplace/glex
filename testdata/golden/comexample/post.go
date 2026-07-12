@@ -20,7 +20,7 @@ func init() {
 
 // A test record.
 type Post struct {
-	LexiconTypeID string `json:"$type"`
+	LexiconTypeID string `json:"$type,omitempty"`
 	// createdAt: Creation timestamp.
 	CreatedAt string `json:"createdAt"`
 	// image: An optional image attachment.
@@ -37,6 +37,13 @@ type Post struct {
 
 // RecordTypeID implements glex.Record.
 func (t *Post) RecordTypeID() string { return "com.example.post" }
+
+// MarshalJSON stamps the $type field, like MarshalCBOR does.
+func (t *Post) MarshalJSON() ([]byte, error) {
+	t.LexiconTypeID = "com.example.post"
+	type alias Post
+	return json.Marshal((*alias)(t))
+}
 
 func (t *Post) MarshalCBOR(w io.Writer) error {
 	if t == nil {
