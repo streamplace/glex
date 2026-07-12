@@ -145,6 +145,50 @@ func (t *OtherRecord) UnmarshalCBOR(r io.Reader) error {
 	return UnmarshalCBOR(r, t)
 }
 
+func TestDecodeCBOR(t *testing.T) {
+	orig := &TestRecord{LexiconTypeID: "test.example.record", Text: "into value"}
+	enc, err := drisl.Marshal(orig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var tr TestRecord
+	if err := DecodeCBOR(enc, &tr); err != nil {
+		t.Fatal(err)
+	}
+	if tr.Text != "into value" {
+		t.Errorf("Text: got %q, want %q", tr.Text, "into value")
+	}
+
+	// Bytes of a different $type must be a hard error, not a zero-filled
+	// struct.
+	var other OtherRecord
+	if err := DecodeCBOR(enc, &other); !errors.Is(err, ErrWrongType) {
+		t.Fatalf("expected ErrWrongType, got %v", err)
+	}
+
+	if err := DecodeCBOR(enc, nil); err == nil {
+		t.Fatal("expected error for nil Record")
+	}
+}
+
+func TestDecodeJSON(t *testing.T) {
+	raw := []byte(`{"$type":"test.example.record","text":"json into value"}`)
+
+	var tr TestRecord
+	if err := DecodeJSON(raw, &tr); err != nil {
+		t.Fatal(err)
+	}
+	if tr.Text != "json into value" {
+		t.Errorf("Text: got %q, want %q", tr.Text, "json into value")
+	}
+
+	var other OtherRecord
+	if err := DecodeJSON(raw, &other); !errors.Is(err, ErrWrongType) {
+		t.Fatalf("expected ErrWrongType, got %v", err)
+	}
+}
+
 func TestCborDecodeAs(t *testing.T) {
 	RegisterType("test.example.record", &TestRecord{})
 	RegisterType("test.example.other", &OtherRecord{})

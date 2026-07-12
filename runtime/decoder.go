@@ -68,28 +68,59 @@ func CborDecodeReader(r io.Reader) (Record, error) {
 	return CborDecodeValue(b)
 }
 
-// CborDecodeAs decodes a DAG-CBOR record and requires it to be the given
-// generated type, returning an error (wrapping ErrWrongType) if the record's
-// $type dispatches to something else:
+// DecodeCBOR decodes a DAG-CBOR record into the given generated type,
+// verifying the wire bytes' $type against the target's RecordTypeID first:
 //
-//	ls, err := glex.CborDecodeAs[placestream.Livestream](b)
+//	var video placestream.Video
+//	if err := glex.DecodeCBOR(b, &video); err != nil { ... }
 //
 // This is the preferred decode call when the caller knows what the record
-// must be — unlike an ok-checked type assertion, an unexpected type is a hard
-// error instead of a silently skipped branch.
+// must be. Unlike a bare unmarshal, bytes of any other type are a hard error
+// (wrapping ErrWrongType) instead of a silently zero-filled struct; and
+// because only pointers to generated types satisfy Record, passing a bare
+// value (or a non-lexicon type) is a compile error.
+func DecodeCBOR(b []byte, rec Record) error {
+	if rec == nil {
+		return xerrors.Errorf("DecodeCBOR into nil Record")
+	}
+	typ, err := typeExtractCBOR(b)
+	if err != nil {
+		return xerrors.Errorf("extracting $type from CBOR: %w", err)
+	}
+	if want := rec.RecordTypeID(); typ != want {
+		return xerrors.Errorf("%w: bytes contain %q, decoding into %T (%s)", ErrWrongType, typ, rec, want)
+	}
+	return drisl.Unmarshal(b, rec)
+}
+
+// DecodeJSON is DecodeCBOR for JSON records.
+func DecodeJSON(b []byte, rec Record) error {
+	if rec == nil {
+		return xerrors.Errorf("DecodeJSON into nil Record")
+	}
+	typ, err := typeExtractJSON(b)
+	if err != nil {
+		return xerrors.Errorf("extracting $type from JSON: %w", err)
+	}
+	if want := rec.RecordTypeID(); typ != want {
+		return xerrors.Errorf("%w: bytes contain %q, decoding into %T (%s)", ErrWrongType, typ, rec, want)
+	}
+	return json.Unmarshal(b, rec)
+}
+
+// CborDecodeAs is expression-shaped sugar over DecodeCBOR, for call sites
+// that want the decoded record as a fresh pointer:
+//
+//	ls, err := glex.CborDecodeAs[placestream.Livestream](b)
 func CborDecodeAs[T any, PT interface {
 	*T
 	Record
 }](b []byte) (*T, error) {
-	rec, err := CborDecodeValue(b)
-	if err != nil {
+	t := new(T)
+	if err := DecodeCBOR(b, PT(t)); err != nil {
 		return nil, err
 	}
-	typed, ok := rec.(PT)
-	if !ok {
-		return nil, xerrors.Errorf("%w: decoded %s (%T), expected %T", ErrWrongType, rec.RecordTypeID(), rec, PT(nil))
-	}
-	return (*T)(typed), nil
+	return t, nil
 }
 
 // JsonDecodeAs is CborDecodeAs for JSON records.
@@ -97,15 +128,11 @@ func JsonDecodeAs[T any, PT interface {
 	*T
 	Record
 }](b []byte) (*T, error) {
-	rec, err := JsonDecodeValue(b)
-	if err != nil {
+	t := new(T)
+	if err := DecodeJSON(b, PT(t)); err != nil {
 		return nil, err
 	}
-	typed, ok := rec.(PT)
-	if !ok {
-		return nil, xerrors.Errorf("%w: decoded %s (%T), expected %T", ErrWrongType, rec.RecordTypeID(), rec, PT(nil))
-	}
-	return (*T)(typed), nil
+	return t, nil
 }
 
 // RecordAs asserts a decoded Record (e.g. a LexiconTypeDecoder.Val) to the

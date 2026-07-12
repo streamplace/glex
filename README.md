@@ -175,10 +175,20 @@ func (t *Post) UnmarshalCBOR(r io.Reader) error {
 - **Decode-by-`$type`**: `CborDecodeValue([]byte)` / `JsonDecodeValue([]byte)`
   — the firehose workhorse. Extracts `$type`, allocates the concrete type,
   decodes, returns `Record`.
-- **Typed decode**: `CborDecodeAs[T]` / `JsonDecodeAs[T]` / `RecordAs[T]` —
-  preferred when the caller knows what the record must be. A record of any
-  other type is a hard error (wrapping `ErrWrongType`), not a silently
-  skipped branch:
+- **Typed decode**: `DecodeCBOR(b, &rec)` / `DecodeJSON(b, &rec)` — preferred
+  when the caller knows what the record must be. Verifies the wire `$type`
+  against the target's `RecordTypeID()` before unmarshaling, so bytes of any
+  other type are a hard error (wrapping `ErrWrongType`) instead of a silently
+  zero-filled struct:
+
+  ```go
+  var ls placestream.Livestream
+  if err := glex.DecodeCBOR(recordBytes, &ls); err != nil { ... }
+  ```
+
+  `CborDecodeAs[T]` / `JsonDecodeAs[T]` are expression-shaped sugar over the
+  same checks, and `RecordAs[T]` does the equivalent for an already-decoded
+  `Record` (e.g. a `LexiconTypeDecoder.Val`):
 
   ```go
   ls, err := glex.CborDecodeAs[placestream.Livestream](recordBytes)
