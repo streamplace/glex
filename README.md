@@ -68,6 +68,7 @@ glex build --lexicons-dir ./lexicons --output-dir ./gen --legacy-mode
 | `--runtime-import` | `github.com/streamplace/glex/runtime` | Go import path of the glex runtime |
 | `--runtime-alias` | `glex` | Import alias used in generated code |
 | `--legacy-mode` | off | Use indigo `lexutil`-compatible profile (for migration) |
+| `--verbose` / `-v` | off | Print each generated lexicon (default: one summary line; failures always print) |
 
 ## Installing lexicons (`glex install`)
 

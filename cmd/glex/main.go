@@ -62,6 +62,11 @@ func main() {
 						Name:  "gen-server",
 						Usage: "generate server handler stubs (stubs.go) into the given package name (e.g. spxrpc)",
 					},
+					&cli.BoolFlag{
+						Name:    "verbose",
+						Aliases: []string{"v"},
+						Usage:   "print each generated lexicon (default: one summary line; failures always print)",
+					},
 				},
 				Action: runBuild,
 			},
@@ -137,6 +142,7 @@ func runBuild(ctx context.Context, cmd *cli.Command) error {
 
 	cfg := lexgen.NewGenConfig(cmd.String("module-path"))
 
+	verbose := cmd.Bool("verbose")
 	anyFailures := false
 	for _, p := range filePaths {
 		if err := genFile(ctx, cmd, cat, cfg, p); err != nil {
@@ -145,11 +151,14 @@ func runBuild(ctx context.Context, cmd *cli.Command) error {
 			anyFailures = true
 			continue
 		}
-		fmt.Printf(" 🟢 %s\n", p)
+		if verbose {
+			fmt.Printf(" 🟢 %s\n", p)
+		}
 	}
 	if anyFailures {
 		return fmt.Errorf("some codegen failed")
 	}
+	fmt.Printf(" 🟢 generated %d lexicons → %s\n", len(filePaths), cmd.String("output-dir"))
 
 	// Generate server handler stubs if requested
 	if serverPkg := cmd.String("gen-server"); serverPkg != "" {
