@@ -8,7 +8,7 @@ import (
 	"context"
 	"io"
 
-	glexrt "github.com/streamplace/glex/runtime"
+	glex "github.com/streamplace/glex/runtime"
 	cbg "github.com/whyrusleeping/cbor-gen"
 )
 
@@ -20,26 +20,29 @@ type CreateLike_Input struct {
 	Uri string `json:"uri"`
 }
 
+// RecordTypeID implements glex.Record.
+func (t *CreateLike_Input) RecordTypeID() string { return "com.example.createLike" }
+
 func (t *CreateLike_Input) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	t.LexiconTypeID = "com.example.createLike#main"
-	return glexrt.MarshalCBOR(w, t)
+	t.LexiconTypeID = "com.example.createLike"
+	return glex.MarshalCBOR(w, t)
 }
 
 func (t *CreateLike_Input) UnmarshalCBOR(r io.Reader) error {
-	return glexrt.UnmarshalCBOR(r, t)
+	return glex.UnmarshalCBOR(r, t)
 }
 
 // CreateLike calls the XRPC method "com.example.createLike".
 //
 // Create a like on a post.
-func CreateLike(ctx context.Context, c glexrt.LexClient, input *CreateLike_Input) (*InteractionView, error) {
+func CreateLike(ctx context.Context, c glex.LexClient, input *CreateLike_Input) (*InteractionView, error) {
 	var out InteractionView
 
-	if err := c.LexDo(ctx, glexrt.Procedure, "application/json", "com.example.createLike", nil, input, &out); err != nil {
+	if err := c.LexDo(ctx, glex.Procedure, "application/json", "com.example.createLike", nil, input, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

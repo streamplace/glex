@@ -1,4 +1,4 @@
-package glexrt
+package glex
 
 import (
 	"encoding/json"
@@ -16,7 +16,9 @@ import (
 //
 // This is the firehose workhorse: a consumer reads a record body from a
 // subscription/repo stream and calls CborDecodeValue to get back a typed value.
-func CborDecodeValue(b []byte) (any, error) {
+// The result is always a pointer to a generated type (e.g. *Livestream); when
+// the expected type is known, prefer CborDecodeAs.
+func CborDecodeValue(b []byte) (Record, error) {
 	typ, err := typeExtractCBOR(b)
 	if err != nil {
 		return nil, xerrors.Errorf("extracting $type from CBOR: %w", err)
@@ -38,7 +40,7 @@ func CborDecodeValue(b []byte) (any, error) {
 // It extracts $type from the JSON bytes, looks up the concrete Go type in the
 // registry, allocates a new instance, and unmarshals the full bytes into it.
 // Returns ErrUnrecognizedType if the $type is not registered.
-func JsonDecodeValue(b []byte) (any, error) {
+func JsonDecodeValue(b []byte) (Record, error) {
 	typ, err := typeExtractJSON(b)
 	if err != nil {
 		return nil, xerrors.Errorf("extracting $type from JSON: %w", err)
@@ -58,7 +60,7 @@ func JsonDecodeValue(b []byte) (any, error) {
 
 // CborDecodeReader is like CborDecodeValue but reads from an io.Reader. It
 // reads all bytes first, then dispatches.
-func CborDecodeReader(r io.Reader) (any, error) {
+func CborDecodeReader(r io.Reader) (Record, error) {
 	b, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
@@ -66,15 +68,85 @@ func CborDecodeReader(r io.Reader) (any, error) {
 	return CborDecodeValue(b)
 }
 
+// CborDecodeAs decodes a DAG-CBOR record and requires it to be the given
+// generated type, returning an error (wrapping ErrWrongType) if the record's
+// $type dispatches to something else:
+//
+//	ls, err := glex.CborDecodeAs[placestream.Livestream](b)
+//
+// This is the preferred decode call when the caller knows what the record
+// must be — unlike an ok-checked type assertion, an unexpected type is a hard
+// error instead of a silently skipped branch.
+func CborDecodeAs[T any, PT interface {
+	*T
+	Record
+}](b []byte) (*T, error) {
+	rec, err := CborDecodeValue(b)
+	if err != nil {
+		return nil, err
+	}
+	typed, ok := rec.(PT)
+	if !ok {
+		return nil, xerrors.Errorf("%w: decoded %s (%T), expected %T", ErrWrongType, rec.RecordTypeID(), rec, PT(nil))
+	}
+	return (*T)(typed), nil
+}
+
+// JsonDecodeAs is CborDecodeAs for JSON records.
+func JsonDecodeAs[T any, PT interface {
+	*T
+	Record
+}](b []byte) (*T, error) {
+	rec, err := JsonDecodeValue(b)
+	if err != nil {
+		return nil, err
+	}
+	typed, ok := rec.(PT)
+	if !ok {
+		return nil, xerrors.Errorf("%w: decoded %s (%T), expected %T", ErrWrongType, rec.RecordTypeID(), rec, PT(nil))
+	}
+	return (*T)(typed), nil
+}
+
+// RecordAs asserts a decoded Record (e.g. a LexiconTypeDecoder.Val) to the
+// given generated type, returning an error (wrapping ErrWrongType) on
+// mismatch or nil input.
+func RecordAs[T any, PT interface {
+	*T
+	Record
+}](rec Record) (*T, error) {
+	if rec == nil {
+		return nil, xerrors.Errorf("%w: record is nil, expected %T", ErrWrongType, PT(nil))
+	}
+	typed, ok := rec.(PT)
+	if !ok {
+		return nil, xerrors.Errorf("%w: have %s (%T), expected %T", ErrWrongType, rec.RecordTypeID(), rec, PT(nil))
+	}
+	return (*T)(typed), nil
+}
+
+// RawRecord holds the bytes of a record whose $type is not in the registry,
+// so unknown records can still round-trip through LexiconTypeDecoder. It
+// implements Record.
+type RawRecord struct {
+	// Type is the $type extracted from the bytes (may be empty).
+	Type string
+	// Encoding is "json" or "cbor", matching the wire format of Bytes.
+	Encoding string
+	Bytes    []byte
+}
+
+func (r *RawRecord) RecordTypeID() string { return r.Type }
+
 // LexiconTypeDecoder is the open "unknown record" wrapper used in view types
 // (e.g., a feed view's Record field, which could be any record type). It
 // holds the decoded value and marshals it back with its $type.
 //
 // On unmarshal (JSON or CBOR), it dispatches via the type registry to decode
-// into the concrete type. If the $type is unrecognized, it stores the raw
-// bytes so the value can still be round-tripped.
+// into the concrete type. If the $type is unrecognized, it stores a
+// *RawRecord so the value can still be round-tripped.
 type LexiconTypeDecoder struct {
-	Val any
+	Val Record
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
@@ -84,7 +156,8 @@ func (ltd *LexiconTypeDecoder) UnmarshalJSON(b []byte) error {
 		if xerrors.Is(err, ErrUnrecognizedType) {
 			// Store raw bytes so the value can be round-tripped even if the
 			// type is not registered.
-			ltd.Val = json.RawMessage(b)
+			typ, _ := typeExtractJSON(b)
+			ltd.Val = &RawRecord{Type: typ, Encoding: "json", Bytes: append([]byte(nil), b...)}
 			return nil
 		}
 		return err
@@ -98,14 +171,15 @@ func (ltd *LexiconTypeDecoder) MarshalJSON() ([]byte, error) {
 	if ltd == nil || ltd.Val == nil {
 		return []byte("null"), nil
 	}
-	// If the value was stored as raw bytes (unrecognized type), return them
-	// as-is.
-	if raw, ok := ltd.Val.(json.RawMessage); ok {
-		return raw, nil
+	// If the value was stored raw (unrecognized type), return it as-is.
+	if raw, ok := ltd.Val.(*RawRecord); ok {
+		if raw.Encoding != "json" {
+			return nil, xerrors.Errorf("cannot marshal raw %s record as JSON", raw.Encoding)
+		}
+		return raw.Bytes, nil
 	}
-	// Ensure the $type field is set on the record before marshaling, by
-	// reflecting on the LexiconTypeID field if present.
-	setTypeIDFromTag(ltd.Val)
+	// Ensure the $type field is set on the record before marshaling.
+	setTypeID(ltd.Val)
 	return json.Marshal(ltd.Val)
 }
 
@@ -115,7 +189,8 @@ func (ltd *LexiconTypeDecoder) UnmarshalCBOR(b []byte) error {
 	if err != nil {
 		if xerrors.Is(err, ErrUnrecognizedType) {
 			// Store raw bytes for round-tripping.
-			ltd.Val = append([]byte(nil), b...)
+			typ, _ := typeExtractCBOR(b)
+			ltd.Val = &RawRecord{Type: typ, Encoding: "cbor", Bytes: append([]byte(nil), b...)}
 			return nil
 		}
 		return err
@@ -129,19 +204,21 @@ func (ltd *LexiconTypeDecoder) MarshalCBOR() ([]byte, error) {
 	if ltd == nil || ltd.Val == nil {
 		return drisl.Marshal(nil)
 	}
-	// If the value was stored as raw bytes, return them as-is.
-	if raw, ok := ltd.Val.([]byte); ok {
-		return raw, nil
+	// If the value was stored raw, return it as-is.
+	if raw, ok := ltd.Val.(*RawRecord); ok {
+		if raw.Encoding != "cbor" {
+			return nil, xerrors.Errorf("cannot marshal raw %s record as CBOR", raw.Encoding)
+		}
+		return raw.Bytes, nil
 	}
-	setTypeIDFromTag(ltd.Val)
+	setTypeID(ltd.Val)
 	return drisl.Marshal(ltd.Val)
 }
 
-// setTypeIDFromTag looks for a LexiconTypeID field on the value's struct (via
-// reflection) and, if the struct has a cborgen tag with a const= value, sets
-// the field to that constant. This ensures $type is always present in output
-// even if the caller didn't set it.
-func setTypeIDFromTag(val any) {
+// setTypeID sets the value's LexiconTypeID field (the $type field on
+// generated structs) from its RecordTypeID, so $type is always present in
+// output even if the caller didn't set it.
+func setTypeID(val Record) {
 	v := reflect.ValueOf(val)
 	if v.Kind() == reflect.Ptr {
 		if v.IsNil() {
@@ -152,53 +229,8 @@ func setTypeIDFromTag(val any) {
 	if v.Kind() != reflect.Struct {
 		return
 	}
-	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		tag := f.Tag.Get("cborgen")
-		if tag == "" {
-			continue
-		}
-		// Look for const= in the cborgen tag (format: "name,const=value" or
-		// "name,omitempty,const=value").
-		constPrefix := "const="
-		idx := indexOf(tag, constPrefix)
-		if idx < 0 {
-			continue
-		}
-		// Verify this field is the $type field.
-		jsonTag := f.Tag.Get("json")
-		if jsonTag != "$type" {
-			continue
-		}
-		constStart := idx + len(constPrefix)
-		constVal := extractToken(tag[constStart:])
-		if constVal == "" {
-			continue
-		}
-		if fv := v.Field(i); fv.CanSet() && fv.Kind() == reflect.String {
-			fv.SetString(constVal)
-		}
+	f := v.FieldByName("LexiconTypeID")
+	if f.IsValid() && f.CanSet() && f.Kind() == reflect.String {
+		f.SetString(val.RecordTypeID())
 	}
-}
-
-func indexOf(s, substr string) int {
-	for i := 0; i+len(substr) <= len(s); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
-}
-
-func extractToken(s string) string {
-	out := make([]byte, 0, len(s))
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c == ',' || c == ' ' || c == '\t' {
-			break
-		}
-		out = append(out, c)
-	}
-	return string(out)
 }

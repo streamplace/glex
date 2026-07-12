@@ -1,4 +1,4 @@
-package glexrt
+package glex
 
 import (
 	"bytes"
@@ -28,7 +28,7 @@ func TestLinkCompat(t *testing.T) {
 	if err := il.MarshalCBOR(&b); err != nil {
 		t.Fatal(err)
 	}
-	// glexrt via drisl
+	// glex via drisl
 	dl := Link(c)
 	db, err := drisl.Marshal(dl)
 	if err != nil {

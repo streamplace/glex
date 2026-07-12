@@ -1,4 +1,4 @@
-package glexrt
+package glex
 
 import (
 	"encoding/json"

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/hyphacoop/go-dasl/drisl"
-	glexrt "github.com/streamplace/glex/runtime"
+	glex "github.com/streamplace/glex/runtime"
 	"github.com/streamplace/glex/testdata/gentest/comexample"
 )
 
@@ -29,7 +29,7 @@ func TestRoundtripCIDStability(t *testing.T) {
 	t.Logf("encoded %d bytes: %x", len(enc), enc)
 
 	// Verify $type is in the encoded bytes by decoding via the registry
-	decoded, err := glexrt.CborDecodeValue(enc)
+	decoded, err := glex.CborDecodeValue(enc)
 	if err != nil {
 		t.Fatalf("CborDecodeValue: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestRoundtripCIDStability(t *testing.T) {
 
 // TestRegistryInit verifies that generated types self-register via init().
 func TestRegistryInit(t *testing.T) {
-	types := glexrt.RegisteredTypes()
+	types := glex.RegisteredTypes()
 	found := false
 	for _, id := range types {
 		if id == "com.example.post" {
@@ -91,7 +91,7 @@ func TestDecodeUnknownType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = glexrt.CborDecodeValue(enc)
+	_, err = glex.CborDecodeValue(enc)
 	if err == nil {
 		t.Fatal("expected ErrUnrecognizedType")
 	}

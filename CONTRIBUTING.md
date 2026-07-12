@@ -16,7 +16,7 @@ system Go is older.
 
 glex has three components:
 
-1. **`runtime/`** (package `glexrt`) — the runtime support library. Value
+1. **`runtime/`** (package `glex`) — the runtime support library. Value
    types (Link, Blob, Bytes), adapter helpers, `$type` registry, decode
    machinery, XRPC client interface. Depends on go-dasl for CBOR and
    whyrusleeping/cbor-gen only for low-level CID/byte-string primitives.

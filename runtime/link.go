@@ -1,4 +1,4 @@
-// Package glexrt is the runtime support library for glex-generated lexicon
+// Package glex is the runtime support library for glex-generated lexicon
 // types. It provides DAG-CBOR-native value wrappers (Link, Blob, Bytes), the
 // io.Writer/io.Reader adapter helpers that let generated structs satisfy
 // indigo's cbg.CBORMarshaler interface, and the $type registry / decode
@@ -8,7 +8,7 @@
 // whyrusleeping/cbor-gen. The cbg library is used only for low-level CID
 // tag-42 and byte-string primitives (WriteCid/ReadCid/WriteByteArray), which
 // are stable and produce byte-identical output to indigo's lexutil.
-package glexrt
+package glex
 
 import (
 	"bytes"

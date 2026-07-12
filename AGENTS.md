@@ -72,7 +72,7 @@ cleanly finishing the Streamplace migration — not throwaway.
 
 `pkg/lex` today only owns `Link`/`Blob`/`Bytes` + adapters; everything else is
 still indigo's `lexutil`. glex needs a self-contained runtime (call it
-`glex/runtime` or a `glexrt` module) reimplementing, on top of go-dasl:
+`glex/runtime` or a `glex` module) reimplementing, on top of go-dasl:
 
 - The `$type` → Go-type **registry** + `RegisterType` (replaces
   `lexutil.RegisterType` + indigo's global `lexTypesMap`).

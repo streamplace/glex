@@ -1,8 +1,9 @@
-package glexrt
+package glex
 
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"testing"
 
@@ -19,6 +20,8 @@ type TestRecord struct {
 	Text          string `json:"text" cborgen:"text"`
 	Count         *int64 `json:"count,omitempty" cborgen:"count,omitempty"`
 }
+
+func (t *TestRecord) RecordTypeID() string { return "test.example.record" }
 
 func (t *TestRecord) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -118,6 +121,88 @@ func TestJsonDecodeValue(t *testing.T) {
 	}
 	if tr.Count == nil || *tr.Count != 7 {
 		t.Errorf("Count: got %v, want 7", tr.Count)
+	}
+}
+
+// OtherRecord is a second registered type, for wrong-type decode tests.
+type OtherRecord struct {
+	LexiconTypeID string `json:"$type"`
+	Name          string `json:"name"`
+}
+
+func (t *OtherRecord) RecordTypeID() string { return "test.example.other" }
+
+func (t *OtherRecord) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	t.LexiconTypeID = "test.example.other"
+	return MarshalCBOR(w, t)
+}
+
+func (t *OtherRecord) UnmarshalCBOR(r io.Reader) error {
+	return UnmarshalCBOR(r, t)
+}
+
+func TestCborDecodeAs(t *testing.T) {
+	RegisterType("test.example.record", &TestRecord{})
+	RegisterType("test.example.other", &OtherRecord{})
+
+	orig := &TestRecord{LexiconTypeID: "test.example.record", Text: "typed decode"}
+	enc, err := drisl.Marshal(orig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tr, err := CborDecodeAs[TestRecord](enc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr.Text != "typed decode" {
+		t.Errorf("Text: got %q, want %q", tr.Text, "typed decode")
+	}
+
+	// Decoding as the wrong type must be a hard error, not a zero value.
+	_, err = CborDecodeAs[OtherRecord](enc)
+	if !errors.Is(err, ErrWrongType) {
+		t.Fatalf("expected ErrWrongType, got %v", err)
+	}
+}
+
+func TestJsonDecodeAs(t *testing.T) {
+	RegisterType("test.example.record", &TestRecord{})
+
+	raw := []byte(`{"$type":"test.example.record","text":"typed json"}`)
+	tr, err := JsonDecodeAs[TestRecord](raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr.Text != "typed json" {
+		t.Errorf("Text: got %q, want %q", tr.Text, "typed json")
+	}
+
+	_, err = JsonDecodeAs[OtherRecord](raw)
+	if !errors.Is(err, ErrWrongType) {
+		t.Fatalf("expected ErrWrongType, got %v", err)
+	}
+}
+
+func TestRecordAs(t *testing.T) {
+	var rec Record = &TestRecord{Text: "as"}
+	tr, err := RecordAs[TestRecord](rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr.Text != "as" {
+		t.Errorf("Text: got %q, want %q", tr.Text, "as")
+	}
+
+	if _, err := RecordAs[OtherRecord](rec); !errors.Is(err, ErrWrongType) {
+		t.Fatalf("expected ErrWrongType, got %v", err)
+	}
+	if _, err := RecordAs[TestRecord](nil); !errors.Is(err, ErrWrongType) {
+		t.Fatalf("expected ErrWrongType for nil, got %v", err)
 	}
 }
 

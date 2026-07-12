@@ -7,12 +7,12 @@ package comexample
 import (
 	"io"
 
-	glexrt "github.com/streamplace/glex/runtime"
+	glex "github.com/streamplace/glex/runtime"
 	cbg "github.com/whyrusleeping/cbor-gen"
 )
 
 func init() {
-	glexrt.RegisterType("com.example.post", &Post{})
+	glex.RegisterType("com.example.post", &Post{})
 }
 
 // A test record.
@@ -21,9 +21,9 @@ type Post struct {
 	// createdAt: Creation timestamp.
 	CreatedAt string `json:"createdAt"`
 	// image: An optional image attachment.
-	Image *glexrt.Blob `json:"image,omitempty"`
+	Image *glex.Blob `json:"image,omitempty"`
 	// rawData: Optional raw binary data.
-	RawData glexrt.Bytes `json:"rawData,omitempty"`
+	RawData glex.Bytes `json:"rawData,omitempty"`
 	// replyTo: A link to another post.
 	ReplyTo *Post `json:"replyTo,omitempty"`
 	// tags: Optional tags.
@@ -32,15 +32,18 @@ type Post struct {
 	Text string `json:"text"`
 }
 
+// RecordTypeID implements glex.Record.
+func (t *Post) RecordTypeID() string { return "com.example.post" }
+
 func (t *Post) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
 	t.LexiconTypeID = "com.example.post"
-	return glexrt.MarshalCBOR(w, t)
+	return glex.MarshalCBOR(w, t)
 }
 
 func (t *Post) UnmarshalCBOR(r io.Reader) error {
-	return glexrt.UnmarshalCBOR(r, t)
+	return glex.UnmarshalCBOR(r, t)
 }

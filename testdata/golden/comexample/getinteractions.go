@@ -9,7 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	glexrt "github.com/streamplace/glex/runtime"
+	glex "github.com/streamplace/glex/runtime"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"io"
 )
@@ -20,7 +20,7 @@ import (
 //
 // limit: Optional limit.
 // uri: The post URI.
-func GetInteractions(ctx context.Context, c glexrt.LexClient, limit *int64, uri string) (*InteractionView, error) {
+func GetInteractions(ctx context.Context, c glex.LexClient, limit *int64, uri string) (*InteractionView, error) {
 	var out InteractionView
 
 	params := map[string]interface{}{}
@@ -29,7 +29,7 @@ func GetInteractions(ctx context.Context, c glexrt.LexClient, limit *int64, uri 
 	}
 	params["uri"] = uri
 
-	if err := c.LexDo(ctx, glexrt.Query, "", "com.example.getInteractions", params, nil, &out); err != nil {
+	if err := c.LexDo(ctx, glex.Query, "", "com.example.getInteractions", params, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

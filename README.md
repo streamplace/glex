@@ -53,7 +53,7 @@ glex build --lexicons-dir ./lexicons --output-dir ./gen
 
 # With explicit runtime import path
 glex build --lexicons-dir ./lexicons --output-dir ./gen \
-  --runtime-import github.com/myorg/myproject/glexrt
+  --runtime-import github.com/myorg/myproject/glex
 
 # Legacy mode (indigo lexutil-compatible, for migration)
 glex build --lexicons-dir ./lexicons --output-dir ./gen --legacy-mode
@@ -66,7 +66,7 @@ glex build --lexicons-dir ./lexicons --output-dir ./gen --legacy-mode
 | `--lexicons-dir` | `lexicons/` | Directory containing lexicon JSON files (recursive) |
 | `--output-dir` / `--out` | `./codegen-output/` | Output directory for generated packages |
 | `--runtime-import` | `github.com/streamplace/glex/runtime` | Go import path of the glex runtime |
-| `--runtime-alias` | `glexrt` | Import alias used in generated code |
+| `--runtime-alias` | `glex` | Import alias used in generated code |
 | `--legacy-mode` | off | Use indigo `lexutil`-compatible profile (for migration) |
 
 ## Installing lexicons (`glex install`)
@@ -126,18 +126,18 @@ package comexample
 
 import (
 	"io"
-	glexrt "github.com/streamplace/glex/runtime"
+	glex "github.com/streamplace/glex/runtime"
 	cbg "github.com/whyrusleeping/cbor-gen"
 )
 
 func init() {
-	glexrt.RegisterType("com.example.post", &Post{})
+	glex.RegisterType("com.example.post", &Post{})
 }
 
 type Post struct {
 	LexiconTypeID string      `json:"$type"`
 	Text          string      `json:"text"`
-	Image         *glexrt.Blob `json:"image,omitempty"`
+	Image         *glex.Blob `json:"image,omitempty"`
 	ReplyTo       *Post       `json:"replyTo,omitempty"`
 	CreatedAt     string      `json:"createdAt"`
 }
@@ -148,17 +148,17 @@ func (t *Post) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 	t.LexiconTypeID = "com.example.post"
-	return glexrt.MarshalCBOR(w, t)
+	return glex.MarshalCBOR(w, t)
 }
 
 func (t *Post) UnmarshalCBOR(r io.Reader) error {
-	return glexrt.UnmarshalCBOR(r, t)
+	return glex.UnmarshalCBOR(r, t)
 }
 ```
 
 ## The runtime
 
-`glex/runtime` (package `glexrt`) provides:
+`glex/runtime` (package `glex`) provides:
 
 - **Value types**: `Link` (CID link), `Blob` (blob reference), `Bytes` (byte
   string) — go-dasl-native, byte-identical to indigo's `lexutil` equivalents.
@@ -166,12 +166,26 @@ func (t *Post) UnmarshalCBOR(r io.Reader) error {
   v)` — bridge between indigo's `cbg.CBORMarshaler` interface and go-dasl.
 - **`$type` registry**: `RegisterType`, `NewFromType`, `RegisteredTypes` —
   runtime dispatch from `$type` strings to concrete Go types.
+- **The sealed `Record` interface**: every generated type implements
+  `RecordTypeID() string` with a *pointer* receiver, so only `*T` (never a
+  bare `T`) is a `Record`. Decode functions return `Record` instead of `any`,
+  which makes a wrong type assertion like `rec.(placestream.Livestream)` — a
+  value type, which can never come out of a decoder — a compile-time
+  "impossible type assertion" error instead of a silently-false `ok`.
 - **Decode-by-`$type`**: `CborDecodeValue([]byte)` / `JsonDecodeValue([]byte)`
   — the firehose workhorse. Extracts `$type`, allocates the concrete type,
-  decodes.
+  decodes, returns `Record`.
+- **Typed decode**: `CborDecodeAs[T]` / `JsonDecodeAs[T]` / `RecordAs[T]` —
+  preferred when the caller knows what the record must be. A record of any
+  other type is a hard error (wrapping `ErrWrongType`), not a silently
+  skipped branch:
+
+  ```go
+  ls, err := glex.CborDecodeAs[placestream.Livestream](recordBytes)
+  ```
 - **`LexiconTypeDecoder`**: open "unknown record" wrapper for view types.
-  Marshals with `$type` injection, falls back to raw bytes for unrecognized
-  types.
+  Marshals with `$type` injection; unrecognized types are preserved as
+  `*RawRecord` so they still round-trip.
 - **Union dispatch**: `TypeExtract` / `CborTypeExtract` /
   `CborTypeExtractReader`.
 - **XRPC client**: `LexClient` interface, `Query` / `Procedure` constants.

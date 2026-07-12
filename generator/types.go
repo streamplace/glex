@@ -161,7 +161,7 @@ func (gen *CodeGenerator) writeStruct(ft *FlatType, obj *lexicon.SchemaObject) e
 	if _, ok := obj.Properties["$type"]; !ok {
 		hasType = true
 		typeConst = gen.Lex.NSID.String()
-		if len(ft.Path) > 0 {
+		if ft.DefName != "main" {
 			typeConst = gen.Lex.NSID.String() + "#" + ft.DefName
 		}
 		fmt.Fprintf(gen.Out, "\tLexiconTypeID string `json:\"$type\"`\n")
@@ -232,9 +232,15 @@ func (gen *CodeGenerator) writeStruct(ft *FlatType, obj *lexicon.SchemaObject) e
 // writeCBORAdapter emits cbg.CBORMarshalor-shaped methods that delegate to
 // go-dasl (via the runtime), so generated structs interoperate with indigo's
 // repo/carstore/MST layer while serializing as canonical DAG-CBOR through
-// go-dasl.
+// go-dasl. It also emits the pointer-receiver RecordTypeID method that makes
+// *T (and only *T, never a bare T) satisfy the runtime's sealed Record
+// interface.
 func (gen *CodeGenerator) writeCBORAdapter(name string, hasType bool, typeConst string) {
 	rt := gen.rtAlias()
+	if hasType {
+		fmt.Fprintf(gen.Out, "// RecordTypeID implements %s.Record.\n", rt)
+		fmt.Fprintf(gen.Out, "func (t *%s) RecordTypeID() string { return %q }\n\n", name, typeConst)
+	}
 	fmt.Fprintf(gen.Out, "func (t *%s) MarshalCBOR(w io.Writer) error {\n", name)
 	fmt.Fprintf(gen.Out, "\tif t == nil {\n")
 	fmt.Fprintf(gen.Out, "\t\t_, err := w.Write(cbg.CborNull)\n")

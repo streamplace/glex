@@ -80,13 +80,13 @@ func (gen *CodeGenerator) FileName() string {
 
 // rtAlias returns the runtime import alias used in generated code.
 func (gen *CodeGenerator) rtAlias() string {
-	return "glexrt"
+	return "glex"
 }
 
 // regAlias returns the alias for the type registry. Same as rtAlias since
 // we always use the glex runtime.
 func (gen *CodeGenerator) regAlias() string {
-	return "glexrt"
+	return "glex"
 }
 
 func (gen *CodeGenerator) deps() map[string]bool {
@@ -96,7 +96,7 @@ func (gen *CodeGenerator) deps() map[string]bool {
 		"\"io\"":                             true,
 		"\"bytes\"":                          true,
 		"\"encoding/json\"":                  true,
-		"glexrt \"github.com/streamplace/glex/runtime\"": true,
+		"glex \"github.com/streamplace/glex/runtime\"": true,
 		"cbg \"github.com/whyrusleeping/cbor-gen\"":     true,
 	}
 

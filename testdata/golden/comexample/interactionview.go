@@ -9,13 +9,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	glexrt "github.com/streamplace/glex/runtime"
+	glex "github.com/streamplace/glex/runtime"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"io"
 )
 
 func init() {
-	glexrt.RegisterType("com.example.interactionView#main", &InteractionView{})
+	glex.RegisterType("com.example.interactionView#main", &InteractionView{})
 }
 
 // Input/output view shape for interactions.
@@ -27,15 +27,18 @@ type InteractionView struct {
 	Subject Post `json:"subject"`
 }
 
+// RecordTypeID implements glex.Record.
+func (t *InteractionView) RecordTypeID() string { return "com.example.interactionView" }
+
 func (t *InteractionView) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
 	t.LexiconTypeID = "com.example.interactionView"
-	return glexrt.MarshalCBOR(w, t)
+	return glex.MarshalCBOR(w, t)
 }
 
 func (t *InteractionView) UnmarshalCBOR(r io.Reader) error {
-	return glexrt.UnmarshalCBOR(r, t)
+	return glex.UnmarshalCBOR(r, t)
 }
