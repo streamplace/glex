@@ -165,6 +165,19 @@ type RawRecord struct {
 
 func (r *RawRecord) RecordTypeID() string { return r.Type }
 
+// RawJSON wraps an arbitrary JSON-marshalable value as a *RawRecord, for
+// carrying non-lexicon payloads (e.g. a DID document) in a
+// LexiconTypeDecoder field. The wrapped value round-trips through JSON
+// marshaling as-is.
+func RawJSON(v any) (*RawRecord, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	typ, _ := typeExtractJSON(b)
+	return &RawRecord{Type: typ, Encoding: "json", Bytes: b}, nil
+}
+
 // LexiconTypeDecoder is the open "unknown record" wrapper used in view types
 // (e.g., a feed view's Record field, which could be any record type). It
 // holds the decoded value and marshals it back with its $type.

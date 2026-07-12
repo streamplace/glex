@@ -250,6 +250,25 @@ func TestRecordAs(t *testing.T) {
 	}
 }
 
+func TestRawJSON(t *testing.T) {
+	raw, err := RawJSON(map[string]any{"id": "did:web:example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ltd := &LexiconTypeDecoder{Val: raw}
+	out, err := ltd.MarshalJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(out, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["id"] != "did:web:example.com" {
+		t.Errorf("id: got %v", m["id"])
+	}
+}
+
 func TestLexiconTypeDecoderJSON(t *testing.T) {
 	RegisterType("test.example.record", &TestRecord{})
 

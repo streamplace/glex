@@ -18,7 +18,7 @@ import (
 	"strings"
 
 	"github.com/bluesky-social/indigo/atproto/lexicon"
-	"github.com/streamplace/glex/generator"
+	lexgen "github.com/streamplace/glex/generator"
 	"github.com/streamplace/glex/installer"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/tools/imports"
@@ -46,7 +46,7 @@ func main() {
 					&cli.StringFlag{
 						Name:    "output-dir",
 						Aliases: []string{"out"},
-						Value:   "./codegen-output/",
+						Value:   "./pkg/",
 						Usage:   "base directory for output packages",
 						Sources: cli.EnvVars("OUTPUT_DIR"),
 					},
