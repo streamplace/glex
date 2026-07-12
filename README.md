@@ -69,6 +69,50 @@ glex build --lexicons-dir ./lexicons --output-dir ./gen --legacy-mode
 | `--runtime-alias` | `glexrt` | Import alias used in generated code |
 | `--legacy-mode` | off | Use indigo `lexutil`-compatible profile (for migration) |
 
+## Installing lexicons (`glex install`)
+
+`glex install` vendors lexicon documents from the AT Protocol network, ported
+from `lex install` in [`@atproto/lex`]. It resolves each NSID's authority via
+its `_lexicon` DNS TXT record, fetches the `com.atproto.lexicon.schema` record
+from the authority's PDS with cryptographic proof verification (commit
+signature + MST inclusion), writes the documents under `./lexicons/`, and
+records every resolution (AT URI + CID) in a `lexicons.json` lockfile.
+Referenced lexicons are installed recursively.
+
+[`@atproto/lex`]: https://github.com/bluesky-social/atproto/tree/main/packages/lex/lex
+
+```sh
+# Install a lexicon (and its dependencies) by NSID
+glex install app.bsky.feed.post
+
+# Pin a lexicon from a specific repository
+glex install at://did:plc:z72i7hdynmk6r22z27h6tvur/com.atproto.lexicon.schema/app.bsky.feed.post
+
+# Re-install everything from lexicons.json (uses vendored files, no re-fetch)
+glex install
+
+# Re-fetch the latest version of every installed lexicon
+glex install --update
+
+# Lockfile check for CI: error if lexicons.json is out of date
+glex install --ci
+```
+
+The output is byte-for-byte identical to `lex install`'s — same JSON
+formatting, key order, and CIDs — so the two tools can be used
+interchangeably on the same repository (verified by
+`TestInstallParityWithAtprotoLex`, which runs both CLIs side by side).
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--manifest` | `./lexicons.json` | Path to the lexicons.json manifest file |
+| `--save` / `-s` | on | Update lexicons.json after installing (`--no-save` to disable) |
+| `--update` | off | Re-resolve and re-fetch all installed lexicons |
+| `--ci` | off | Error if installed lexicons don't match the manifest CIDs |
+| `--lexicons` | `./lexicons` | Directory containing vendored lexicon JSON files |
+
 ## Generated output
 
 For a lexicon like `com.example.post` (a record with text, blob, and link

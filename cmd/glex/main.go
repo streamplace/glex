@@ -19,6 +19,7 @@ import (
 
 	"github.com/bluesky-social/indigo/atproto/lexicon"
 	"github.com/streamplace/glex/generator"
+	"github.com/streamplace/glex/installer"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/tools/imports"
 )
@@ -30,11 +31,11 @@ func main() {
 		Description: "glex reads Lexicon JSON schemas and emits idiomatic Go types + XRPC clients that serialize as canonical DAG-CBOR via go-dasl.",
 		Commands: []*cli.Command{
 			{
-				Name:    "build",
-				Aliases: []string{"gen", "b"},
-				Usage:   "Generate Go source from lexicon JSON definitions",
+				Name:        "build",
+				Aliases:     []string{"gen", "b"},
+				Usage:       "Generate Go source from lexicon JSON definitions",
 				Description: "Enumerates all local lexicons (JSON files) in the lexicons directory,\nand outputs Go source files for each into the output directory.",
-				ArgsUsage: `[file-or-dir]*`,
+				ArgsUsage:   `[file-or-dir]*`,
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:    "lexicons-dir",
@@ -64,6 +65,40 @@ func main() {
 				},
 				Action: runBuild,
 			},
+			{
+				Name:        "install",
+				Aliases:     []string{"i"},
+				Usage:       "Fetch and install lexicon documents",
+				Description: "Resolves lexicon NSIDs (or at:// URIs) over the network, vendors the\nlexicon JSON documents into the lexicons directory, and records the\nresolutions in a lexicons.json manifest. Referenced lexicons are\ninstalled recursively. Compatible with @atproto/lex's `lex install`.",
+				ArgsUsage:   `[nsid..]`,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "manifest",
+						Value: "./lexicons.json",
+						Usage: "path to lexicons.json manifest file",
+					},
+					&cli.BoolWithInverseFlag{
+						Name:    "save",
+						Aliases: []string{"s"},
+						Value:   true,
+						Usage:   "Updates lexicons.json with installed lexicons (use --no-save to disable)",
+					},
+					&cli.BoolFlag{
+						Name:  "update",
+						Usage: "update all installed lexicons to their latest versions by re-resolving and re-installing them",
+					},
+					&cli.BoolFlag{
+						Name:  "ci",
+						Usage: "error if the installed lexicons do not match the CIDs in the lexicons.json manifest",
+					},
+					&cli.StringFlag{
+						Name:  "lexicons",
+						Value: "./lexicons",
+						Usage: "directory containing lexicon JSON files",
+					},
+				},
+				Action: runInstall,
+			},
 		},
 	}
 
@@ -71,6 +106,20 @@ func main() {
 		fmt.Fprintf(os.Stderr, "glex: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func runInstall(ctx context.Context, cmd *cli.Command) error {
+	return installer.Install(ctx, installer.Options{
+		Manifest: cmd.String("manifest"),
+		Lexicons: cmd.String("lexicons"),
+		Add:      cmd.Args().Slice(),
+		Save:     cmd.Bool("save"),
+		Update:   cmd.Bool("update"),
+		CI:       cmd.Bool("ci"),
+		Log: func(format string, args ...any) {
+			fmt.Printf(format+"\n", args...)
+		},
+	})
 }
 
 func runBuild(ctx context.Context, cmd *cli.Command) error {
