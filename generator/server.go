@@ -32,6 +32,9 @@ func (gen *CodeGenerator) WriteServerStubs(allFlat []*FlatLexicon, pkgName strin
 		fmt.Fprintf(gen.Out, format, args...)
 	}
 
+	if gen.Config.WarningText != "" {
+		pf("// %s\n\n", gen.Config.WarningText)
+	}
 	pf("package %s\n\n", pkgName)
 	pf("import (\n")
 	pf("\t\"context\"\n")
