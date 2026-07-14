@@ -194,9 +194,16 @@ func (t *Post) UnmarshalCBOR(r io.Reader) error {
   ```go
   ls, err := glex.CborDecodeAs[placestream.Livestream](recordBytes)
   ```
-- **`LexiconTypeDecoder`**: open "unknown record" wrapper for view types.
-  Marshals with `$type` injection; unrecognized types are preserved as
-  `*RawRecord` so they still round-trip.
+- **`LexiconTypeDecoder`**: open "unknown record" wrapper for view types and
+  `unknown` lexicon fields. Marshals with `$type` injection; unrecognized
+  types are preserved as `*RawRecord` so they still round-trip. To put a
+  **non-lexicon payload** (e.g. a DID document) into an `unknown` field, wrap
+  it with `Unknown` — it round-trips verbatim, no `$type` required:
+
+  ```go
+  didDoc, err := glex.Unknown(ident.DIDDocument())
+  out.DidDoc = didDoc
+  ```
 - **Union dispatch**: `TypeExtract` / `CborTypeExtract` /
   `CborTypeExtractReader`.
 - **XRPC client**: `LexClient` interface, `Query` / `Procedure` constants.

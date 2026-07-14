@@ -250,6 +250,50 @@ func TestRecordAs(t *testing.T) {
 	}
 }
 
+func TestUnknown(t *testing.T) {
+	ltd, err := Unknown(map[string]any{
+		"id":      "did:web:example.com",
+		"service": []any{map[string]any{"type": "AtprotoPersonalDataServer"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := json.Marshal(ltd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(out, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["id"] != "did:web:example.com" {
+		t.Errorf("id: got %v", m["id"])
+	}
+	if _, present := m["$type"]; present {
+		t.Errorf("no $type should be injected, got %v", m["$type"])
+	}
+
+	// A value that already carries a $type keeps it verbatim.
+	ltd2, err := Unknown(map[string]any{"$type": "com.example.custom", "x": float64(1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ltd2.Val.RecordTypeID(); got != "com.example.custom" {
+		t.Errorf("RecordTypeID: got %q, want com.example.custom", got)
+	}
+	out2, err := json.Marshal(ltd2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = map[string]any{}
+	if err := json.Unmarshal(out2, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["$type"] != "com.example.custom" {
+		t.Errorf("$type: got %v, want com.example.custom", m["$type"])
+	}
+}
+
 func TestRawJSON(t *testing.T) {
 	raw, err := RawJSON(map[string]any{"id": "did:web:example.com"})
 	if err != nil {

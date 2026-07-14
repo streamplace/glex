@@ -25,6 +25,10 @@ type CBOR interface {
 // assertion like rec.(placestream.Livestream) — a value type, which can
 // never come out of a decoder — is a compile-time "impossible type
 // assertion" error instead of a silently-false ok at runtime.
+//
+// Values that aren't lexicon records (e.g. a DID document destined for a
+// field of lexicon type `unknown`) don't implement Record; wrap them with
+// Unknown (or RawJSON) instead.
 type Record interface {
 	// RecordTypeID returns the lexicon $type string for this record type,
 	// e.g. "place.stream.livestream" or "app.bsky.feed.defs#postView".

@@ -165,10 +165,24 @@ type RawRecord struct {
 
 func (r *RawRecord) RecordTypeID() string { return r.Type }
 
+// Unknown wraps an arbitrary JSON-marshalable value for a lexicon field of
+// type `unknown` (generated as *LexiconTypeDecoder) whose content is not a
+// lexicon record — e.g. a DID document:
+//
+//	didDoc, err := glex.Unknown(ident.DIDDocument())
+//	out.DidDoc = didDoc
+func Unknown(v any) (*LexiconTypeDecoder, error) {
+	raw, err := RawJSON(v)
+	if err != nil {
+		return nil, err
+	}
+	return &LexiconTypeDecoder{Val: raw}, nil
+}
+
 // RawJSON wraps an arbitrary JSON-marshalable value as a *RawRecord, for
 // carrying non-lexicon payloads (e.g. a DID document) in a
 // LexiconTypeDecoder field. The wrapped value round-trips through JSON
-// marshaling as-is.
+// marshaling as-is. Unknown is the one-call version for the common case.
 func RawJSON(v any) (*RawRecord, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
