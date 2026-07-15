@@ -13,7 +13,7 @@ import (
 // MarshalCBOR(io.Writer) adapter, so they interoperate with indigo's
 // repo/carstore/MST layer while serializing through go-dasl.
 func MarshalCBOR(w io.Writer, v any) error {
-	b, err := drisl.Marshal(v)
+	b, err := drisl.Marshal(prepareForMarshal(v))
 	if err != nil {
 		return err
 	}
@@ -34,7 +34,7 @@ func UnmarshalCBOR(r io.Reader, v any) error {
 // MarshalCBORBytes encodes v as canonical DAG-CBOR and returns the bytes.
 // Generated union types call this from their drisl-shaped MarshalCBOR.
 func MarshalCBORBytes(v any) ([]byte, error) {
-	return drisl.Marshal(v)
+	return drisl.Marshal(prepareForMarshal(v))
 }
 
 // CidForRecord computes the canonical DAG-CBOR CID for a generated record,
@@ -42,7 +42,7 @@ func MarshalCBORBytes(v any) ([]byte, error) {
 // this instead of drisl.CidForValue, which encodes the record as-is and would
 // silently omit $type when the caller never set LexiconTypeID.
 func CidForRecord(rec Record) (daslcid.Cid, error) {
-	return drisl.CidForValue(stampedForMarshal(rec))
+	return drisl.CidForValue(prepareForMarshal(stampedForMarshal(rec)))
 }
 
 // UnmarshalCBORBytes decodes canonical DAG-CBOR bytes into v. Generated union

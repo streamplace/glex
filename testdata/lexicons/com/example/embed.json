@@ -40,11 +40,16 @@
     "images": {
       "type": "object",
       "description": "An image embed.",
-      "required": ["alt"],
+      "required": ["alt", "urls"],
       "properties": {
         "alt": {
           "type": "string",
           "description": "Alt text."
+        },
+        "urls": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Image URLs (required array, for nil-encoding coverage)."
         }
       }
     },

@@ -376,6 +376,8 @@ type Embed_Images struct {
 	LexiconTypeID string `json:"$type,omitempty"`
 	// alt: Alt text.
 	Alt string `json:"alt"`
+	// urls: Image URLs (required array, for nil-encoding coverage).
+	Urls []string `json:"urls"`
 }
 
 // RecordTypeID implements glex.Record.

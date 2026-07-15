@@ -264,7 +264,7 @@ func (ltd *LexiconTypeDecoder) MarshalCBOR() ([]byte, error) {
 		}
 		return raw.Bytes, nil
 	}
-	return drisl.Marshal(stampedForMarshal(ltd.Val))
+	return drisl.Marshal(prepareForMarshal(stampedForMarshal(ltd.Val)))
 }
 
 // stampedForMarshal returns val with its LexiconTypeID field (the $type field

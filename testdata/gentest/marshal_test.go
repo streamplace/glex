@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/hyphacoop/go-dasl/drisl"
 	"github.com/streamplace/glex/testdata/gentest/comexample"
 )
 
@@ -24,6 +25,34 @@ func TestValueMarshalStampsType(t *testing.T) {
 	}
 	if m["$type"] != "com.example.post" {
 		t.Errorf("value-marshal $type: got %v, want com.example.post", m["$type"])
+	}
+}
+
+// TestRequiredNilArrayEncodesEmpty verifies that an unset required array
+// field encodes as an empty CBOR array (matching cbor-gen), not null — a
+// cbor-gen consumer fails with "expected cbor array" on null, which broke
+// subscribeRepos interop with indigo.
+func TestRequiredNilArrayEncodesEmpty(t *testing.T) {
+	rec := &comexample.Embed{
+		CreatedAt: "2024-01-01T00:00:00Z",
+		Media: comexample.Embed_Media{
+			Embed_Images: &comexample.Embed_Images{Alt: "no urls set"},
+		},
+	}
+	var buf bytes.Buffer
+	if err := rec.MarshalCBOR(&buf); err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := drisl.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	media := m["media"].(map[string]any)
+	if _, ok := media["urls"].([]any); !ok {
+		t.Errorf("required nil array inside union variant: got %T (%v), want empty array", media["urls"], media["urls"])
+	}
+	if rec.Media.Embed_Images.Urls != nil {
+		t.Error("marshal mutated the record's nil slice")
 	}
 }
 
