@@ -30,6 +30,18 @@ func UnmarshalCBOR(r io.Reader, v any) error {
 	return drisl.Unmarshal(b, v)
 }
 
+// MarshalCBORBytes encodes v as canonical DAG-CBOR and returns the bytes.
+// Generated union types call this from their drisl-shaped MarshalCBOR.
+func MarshalCBORBytes(v any) ([]byte, error) {
+	return drisl.Marshal(v)
+}
+
+// UnmarshalCBORBytes decodes canonical DAG-CBOR bytes into v. Generated union
+// types call this from their drisl-shaped UnmarshalCBOR.
+func UnmarshalCBORBytes(b []byte, v any) error {
+	return drisl.Unmarshal(b, v)
+}
+
 // typeHolder is used to extract just the $type field from a JSON or CBOR
 // record for union/registry dispatch.
 type typeHolder struct {

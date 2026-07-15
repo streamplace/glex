@@ -1,0 +1,64 @@
+{
+  "lexicon": 1,
+  "id": "com.example.embed",
+  "description": "A record exercising union codegen: required union, optional union, and an array of unions.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A test record with union fields.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["media", "createdAt"],
+        "properties": {
+          "media": {
+            "type": "union",
+            "refs": ["#images", "#external"],
+            "description": "The primary embedded media."
+          },
+          "fallback": {
+            "type": "union",
+            "refs": ["#images", "#external"],
+            "description": "Optional fallback media."
+          },
+          "extras": {
+            "type": "array",
+            "items": {
+              "type": "union",
+              "refs": ["#images", "#external"]
+            },
+            "description": "Additional media items."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Creation timestamp."
+          }
+        }
+      }
+    },
+    "images": {
+      "type": "object",
+      "description": "An image embed.",
+      "required": ["alt"],
+      "properties": {
+        "alt": {
+          "type": "string",
+          "description": "Alt text."
+        }
+      }
+    },
+    "external": {
+      "type": "object",
+      "description": "An external link embed.",
+      "required": ["uri"],
+      "properties": {
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "description": "The external URI."
+        }
+      }
+    }
+  }
+}

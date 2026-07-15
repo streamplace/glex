@@ -326,6 +326,9 @@ func (gen *CodeGenerator) writeUnion(ft *FlatType, union *lexicon.SchemaUnion) e
 	}
 	sort.Strings(refNames)
 
+	// Union dispatch uses the glex runtime.
+	rt := gen.regAlias()
+
 	// first print out the union struct type
 	if union.Description != nil {
 		for _, l := range strings.Split(*union.Description, "\n") {
@@ -337,21 +340,32 @@ func (gen *CodeGenerator) writeUnion(ft *FlatType, union *lexicon.SchemaUnion) e
 		ref := unionRefs[rname]
 		fmt.Fprintf(gen.Out, "\t%s *%s\n", ref.FieldName, ref.TypeName)
 	}
+	fmt.Fprintf(gen.Out, "\t// Raw preserves a variant whose $type is not in this union's generated\n")
+	fmt.Fprintf(gen.Out, "\t// set, so unrecognized variants still round-trip losslessly through\n")
+	fmt.Fprintf(gen.Out, "\t// decode/re-encode. Nil when a known variant is set.\n")
+	fmt.Fprintf(gen.Out, "\tRaw *%s.RawRecord\n", rt)
 	fmt.Fprintf(gen.Out, "}\n\n")
 
-	// Union dispatch uses the glex runtime.
-	rt := gen.regAlias()
-
 	// ... then MarshalJSON
-	fmt.Fprintf(gen.Out, "func (t *%s) MarshalJSON() ([]byte, error) {\n", name)
+	fmt.Fprintf(gen.Out, "// MarshalJSON emits the set variant, stamped with its $type, per the atproto\n")
+	fmt.Fprintf(gen.Out, "// union wire format. The value receiver stamps a copy, so the variant is\n")
+	fmt.Fprintf(gen.Out, "// never mutated and both %s and *%s marshal correctly.\n", name, name)
+	fmt.Fprintf(gen.Out, "func (t %s) MarshalJSON() ([]byte, error) {\n", name)
 	for _, rname := range refNames {
 		ref := unionRefs[rname]
 		fmt.Fprintf(gen.Out, "\tif t.%s != nil {\n", ref.FieldName)
-		fmt.Fprintf(gen.Out, "\t\tt.%s.LexiconTypeID = \"%s\"\n", ref.FieldName, ref.LexName)
-		fmt.Fprintf(gen.Out, "\t\treturn json.Marshal(t.%s)\n", ref.FieldName)
+		fmt.Fprintf(gen.Out, "\t\tcp := *t.%s\n", ref.FieldName)
+		fmt.Fprintf(gen.Out, "\t\tcp.LexiconTypeID = \"%s\"\n", ref.LexName)
+		fmt.Fprintf(gen.Out, "\t\treturn json.Marshal(&cp)\n")
 		fmt.Fprintf(gen.Out, "\t}\n")
 	}
-	fmt.Fprintf(gen.Out, "\treturn nil, fmt.Errorf(\"can not marshal empty union as JSON\")")
+	fmt.Fprintf(gen.Out, "\tif t.Raw != nil {\n")
+	fmt.Fprintf(gen.Out, "\t\tif t.Raw.Encoding != \"json\" {\n")
+	fmt.Fprintf(gen.Out, "\t\t\treturn nil, fmt.Errorf(\"cannot marshal raw %%s record as JSON in union %s\", t.Raw.Encoding)\n", name)
+	fmt.Fprintf(gen.Out, "\t\t}\n")
+	fmt.Fprintf(gen.Out, "\t\treturn t.Raw.Bytes, nil\n")
+	fmt.Fprintf(gen.Out, "\t}\n")
+	fmt.Fprintf(gen.Out, "\treturn nil, fmt.Errorf(\"cannot marshal empty union %s as JSON\")\n", name)
 	fmt.Fprintf(gen.Out, "}\n\n")
 
 	// ... then UnmarshalJSON
@@ -369,31 +383,44 @@ func (gen *CodeGenerator) writeUnion(ft *FlatType, union *lexicon.SchemaUnion) e
 	}
 	fmt.Fprintf(gen.Out, "\tdefault:\n")
 	if union.Closed != nil && *union.Closed {
-		fmt.Fprintf(gen.Out, "\t\treturn fmt.Errorf(\"closed unions must match a listed schema\")\n")
+		fmt.Fprintf(gen.Out, "\t\treturn fmt.Errorf(\"closed union %s: unrecognized $type %%q\", typ)\n", name)
 	} else {
+		fmt.Fprintf(gen.Out, "\t\tt.Raw = &%s.RawRecord{Type: typ, Encoding: \"json\", Bytes: append([]byte(nil), b...)}\n", rt)
 		fmt.Fprintf(gen.Out, "\t\treturn nil\n")
 	}
 	fmt.Fprintf(gen.Out, "\t}\n")
 	fmt.Fprintf(gen.Out, "}\n\n")
 
-	// ... then MarshalCBOR
-	fmt.Fprintf(gen.Out, "func (t *%s) MarshalCBOR(w io.Writer) error {\n\n", name)
-	fmt.Fprintf(gen.Out, "\tif t == nil {\n")
-	fmt.Fprintf(gen.Out, "\t\t_, err := w.Write(cbg.CborNull)\n")
-	fmt.Fprintf(gen.Out, "\t\treturn err")
-	fmt.Fprintf(gen.Out, "\t}\n")
+	// ... then MarshalCBOR. This is drisl-shaped (MarshalCBOR() ([]byte, error)),
+	// NOT cbg-shaped: go-dasl only invokes drisl.Marshaler during reflection, so
+	// a cbg-shaped method on a union nested inside a record would be silently
+	// ignored and the union would serialize as its Go wrapper struct instead of
+	// the atproto single-variant form.
+	fmt.Fprintf(gen.Out, "// MarshalCBOR implements drisl.Marshaler, emitting the set variant (stamped\n")
+	fmt.Fprintf(gen.Out, "// with its $type) per the atproto union wire format. go-dasl invokes this\n")
+	fmt.Fprintf(gen.Out, "// when the union appears inside another record, so nested unions serialize\n")
+	fmt.Fprintf(gen.Out, "// correctly.\n")
+	fmt.Fprintf(gen.Out, "func (t %s) MarshalCBOR() ([]byte, error) {\n", name)
 	for _, rname := range refNames {
 		ref := unionRefs[rname]
 		fmt.Fprintf(gen.Out, "\tif t.%s != nil {\n", ref.FieldName)
-		fmt.Fprintf(gen.Out, "\t\treturn t.%s.MarshalCBOR(w)\n", ref.FieldName)
+		fmt.Fprintf(gen.Out, "\t\tcp := *t.%s\n", ref.FieldName)
+		fmt.Fprintf(gen.Out, "\t\tcp.LexiconTypeID = \"%s\"\n", ref.LexName)
+		fmt.Fprintf(gen.Out, "\t\treturn %s.MarshalCBORBytes(&cp)\n", rt)
 		fmt.Fprintf(gen.Out, "\t}\n")
 	}
-	fmt.Fprintf(gen.Out, "\treturn fmt.Errorf(\"can not marshal empty union as CBOR\")")
+	fmt.Fprintf(gen.Out, "\tif t.Raw != nil {\n")
+	fmt.Fprintf(gen.Out, "\t\tif t.Raw.Encoding != \"cbor\" {\n")
+	fmt.Fprintf(gen.Out, "\t\t\treturn nil, fmt.Errorf(\"cannot marshal raw %%s record as CBOR in union %s\", t.Raw.Encoding)\n", name)
+	fmt.Fprintf(gen.Out, "\t\t}\n")
+	fmt.Fprintf(gen.Out, "\t\treturn t.Raw.Bytes, nil\n")
+	fmt.Fprintf(gen.Out, "\t}\n")
+	fmt.Fprintf(gen.Out, "\treturn nil, fmt.Errorf(\"cannot marshal empty union %s as CBOR\")\n", name)
 	fmt.Fprintf(gen.Out, "}\n\n")
 
-	// ... then UnmarshalCBOR
-	fmt.Fprintf(gen.Out, "func (t *%s) UnmarshalCBOR(r io.Reader) error {\n", name)
-	fmt.Fprintf(gen.Out, "\ttyp, b, err := %s.CborTypeExtractReader(r)\n", rt)
+	// ... then UnmarshalCBOR (drisl-shaped, matching MarshalCBOR)
+	fmt.Fprintf(gen.Out, "func (t *%s) UnmarshalCBOR(b []byte) error {\n", name)
+	fmt.Fprintf(gen.Out, "\ttyp, err := %s.CborTypeExtract(b)\n", rt)
 	fmt.Fprintf(gen.Out, "\tif err != nil {\n")
 	fmt.Fprintf(gen.Out, "\t\treturn err\n")
 	fmt.Fprintf(gen.Out, "\t}\n\n")
@@ -402,10 +429,15 @@ func (gen *CodeGenerator) writeUnion(ft *FlatType, union *lexicon.SchemaUnion) e
 		ref := unionRefs[rname]
 		fmt.Fprintf(gen.Out, "\tcase \"%s\":\n", ref.LexName)
 		fmt.Fprintf(gen.Out, "\t\tt.%s = new(%s)\n", ref.FieldName, ref.TypeName)
-		fmt.Fprintf(gen.Out, "\t\treturn t.%s.UnmarshalCBOR(bytes.NewReader(b))\n", ref.FieldName)
+		fmt.Fprintf(gen.Out, "\t\treturn %s.UnmarshalCBORBytes(b, t.%s)\n", rt, ref.FieldName)
 	}
 	fmt.Fprintf(gen.Out, "\tdefault:\n")
-	fmt.Fprintf(gen.Out, "\t\treturn nil\n")
+	if union.Closed != nil && *union.Closed {
+		fmt.Fprintf(gen.Out, "\t\treturn fmt.Errorf(\"closed union %s: unrecognized $type %%q\", typ)\n", name)
+	} else {
+		fmt.Fprintf(gen.Out, "\t\tt.Raw = &%s.RawRecord{Type: typ, Encoding: \"cbor\", Bytes: append([]byte(nil), b...)}\n", rt)
+		fmt.Fprintf(gen.Out, "\t\treturn nil\n")
+	}
 	fmt.Fprintf(gen.Out, "\t}\n")
 	fmt.Fprintf(gen.Out, "}\n\n")
 
