@@ -33,11 +33,13 @@ type Embed struct {
 // RecordTypeID implements glex.Record.
 func (t *Embed) RecordTypeID() string { return "com.example.embed" }
 
-// MarshalJSON stamps the $type field, like MarshalCBOR does.
-func (t *Embed) MarshalJSON() ([]byte, error) {
+// MarshalJSON stamps the $type field, like MarshalCBOR does. The value
+// receiver operates on a copy, so the record is never mutated and both
+// Embed and *Embed marshal with $type.
+func (t Embed) MarshalJSON() ([]byte, error) {
 	t.LexiconTypeID = "com.example.embed"
 	type alias Embed
-	return json.Marshal((*alias)(t))
+	return json.Marshal((alias)(t))
 }
 
 func (t *Embed) MarshalCBOR(w io.Writer) error {
@@ -45,8 +47,10 @@ func (t *Embed) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	t.LexiconTypeID = "com.example.embed"
-	return glex.MarshalCBOR(w, t)
+	// stamp $type on a copy so marshal never mutates the record
+	cp := *t
+	cp.LexiconTypeID = "com.example.embed"
+	return glex.MarshalCBOR(w, &cp)
 }
 
 func (t *Embed) UnmarshalCBOR(r io.Reader) error {
@@ -354,8 +358,10 @@ func (t *Embed_External) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	t.LexiconTypeID = "com.example.embed#external"
-	return glex.MarshalCBOR(w, t)
+	// stamp $type on a copy so marshal never mutates the record
+	cp := *t
+	cp.LexiconTypeID = "com.example.embed#external"
+	return glex.MarshalCBOR(w, &cp)
 }
 
 func (t *Embed_External) UnmarshalCBOR(r io.Reader) error {
@@ -379,8 +385,10 @@ func (t *Embed_Images) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	t.LexiconTypeID = "com.example.embed#images"
-	return glex.MarshalCBOR(w, t)
+	// stamp $type on a copy so marshal never mutates the record
+	cp := *t
+	cp.LexiconTypeID = "com.example.embed#images"
+	return glex.MarshalCBOR(w, &cp)
 }
 
 func (t *Embed_Images) UnmarshalCBOR(r io.Reader) error {

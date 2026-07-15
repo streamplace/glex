@@ -232,9 +232,8 @@ func (ltd *LexiconTypeDecoder) MarshalJSON() ([]byte, error) {
 		}
 		return raw.Bytes, nil
 	}
-	// Ensure the $type field is set on the record before marshaling.
-	setTypeID(ltd.Val)
-	return json.Marshal(ltd.Val)
+	// Ensure the $type field is set in the output, without mutating Val.
+	return json.Marshal(stampedForMarshal(ltd.Val))
 }
 
 // UnmarshalCBOR implements go-dasl's Unmarshaler.
@@ -265,26 +264,33 @@ func (ltd *LexiconTypeDecoder) MarshalCBOR() ([]byte, error) {
 		}
 		return raw.Bytes, nil
 	}
-	setTypeID(ltd.Val)
-	return drisl.Marshal(ltd.Val)
+	return drisl.Marshal(stampedForMarshal(ltd.Val))
 }
 
-// setTypeID sets the value's LexiconTypeID field (the $type field on
-// generated structs) from its RecordTypeID, so $type is always present in
-// output even if the caller didn't set it.
-func setTypeID(val Record) {
+// stampedForMarshal returns val with its LexiconTypeID field (the $type field
+// on generated structs) set from its RecordTypeID, so $type is always present
+// in output even if the caller didn't set it. When the field needs to change,
+// the record is shallow-copied first — marshaling never mutates the caller's
+// value (which would be a data race for a record marshaled concurrently).
+func stampedForMarshal(val Record) any {
 	v := reflect.ValueOf(val)
-	if v.Kind() == reflect.Ptr {
-		if v.IsNil() {
-			return
-		}
-		v = v.Elem()
+	if v.Kind() != reflect.Ptr || v.IsNil() {
+		return val
 	}
-	if v.Kind() != reflect.Struct {
-		return
+	e := v.Elem()
+	if e.Kind() != reflect.Struct {
+		return val
 	}
-	f := v.FieldByName("LexiconTypeID")
-	if f.IsValid() && f.CanSet() && f.Kind() == reflect.String {
-		f.SetString(val.RecordTypeID())
+	f := e.FieldByName("LexiconTypeID")
+	if !f.IsValid() || f.Kind() != reflect.String {
+		return val
 	}
+	want := val.RecordTypeID()
+	if f.String() == want {
+		return val
+	}
+	cp := reflect.New(e.Type())
+	cp.Elem().Set(e)
+	cp.Elem().FieldByName("LexiconTypeID").SetString(want)
+	return cp.Interface()
 }

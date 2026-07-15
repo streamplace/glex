@@ -28,11 +28,13 @@ type InteractionView struct {
 // RecordTypeID implements glex.Record.
 func (t *InteractionView) RecordTypeID() string { return "com.example.interactionView" }
 
-// MarshalJSON stamps the $type field, like MarshalCBOR does.
-func (t *InteractionView) MarshalJSON() ([]byte, error) {
+// MarshalJSON stamps the $type field, like MarshalCBOR does. The value
+// receiver operates on a copy, so the record is never mutated and both
+// InteractionView and *InteractionView marshal with $type.
+func (t InteractionView) MarshalJSON() ([]byte, error) {
 	t.LexiconTypeID = "com.example.interactionView"
 	type alias InteractionView
-	return json.Marshal((*alias)(t))
+	return json.Marshal((alias)(t))
 }
 
 func (t *InteractionView) MarshalCBOR(w io.Writer) error {
@@ -40,8 +42,10 @@ func (t *InteractionView) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	t.LexiconTypeID = "com.example.interactionView"
-	return glex.MarshalCBOR(w, t)
+	// stamp $type on a copy so marshal never mutates the record
+	cp := *t
+	cp.LexiconTypeID = "com.example.interactionView"
+	return glex.MarshalCBOR(w, &cp)
 }
 
 func (t *InteractionView) UnmarshalCBOR(r io.Reader) error {

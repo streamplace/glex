@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 
+	daslcid "github.com/hyphacoop/go-dasl/cid"
 	"github.com/hyphacoop/go-dasl/drisl"
 )
 
@@ -34,6 +35,14 @@ func UnmarshalCBOR(r io.Reader, v any) error {
 // Generated union types call this from their drisl-shaped MarshalCBOR.
 func MarshalCBORBytes(v any) ([]byte, error) {
 	return drisl.Marshal(v)
+}
+
+// CidForRecord computes the canonical DAG-CBOR CID for a generated record,
+// stamping $type the same way marshaling does (without mutating rec). Use
+// this instead of drisl.CidForValue, which encodes the record as-is and would
+// silently omit $type when the caller never set LexiconTypeID.
+func CidForRecord(rec Record) (daslcid.Cid, error) {
+	return drisl.CidForValue(stampedForMarshal(rec))
 }
 
 // UnmarshalCBORBytes decodes canonical DAG-CBOR bytes into v. Generated union

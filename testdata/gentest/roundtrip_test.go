@@ -54,14 +54,16 @@ func TestRoundtripCIDStability(t *testing.T) {
 		t.Errorf("CID stability: re-marshal not byte-identical\n  first:  %x\n  second: %x", enc, buf2.Bytes())
 	}
 
-	// Verify CID is stable by computing it directly
-	cid1, err := drisl.CidForValue(post)
+	// Verify CID is stable by computing it directly. CidForRecord stamps
+	// $type the way marshaling does; post itself is never mutated, so a bare
+	// drisl.CidForValue(post) would omit $type and disagree.
+	cid1, err := glex.CidForRecord(post)
 	if err != nil {
-		t.Fatalf("CidForValue: %v", err)
+		t.Fatalf("CidForRecord: %v", err)
 	}
-	cid2, err := drisl.CidForValue(post2)
+	cid2, err := glex.CidForRecord(post2)
 	if err != nil {
-		t.Fatalf("CidForValue (2): %v", err)
+		t.Fatalf("CidForRecord (2): %v", err)
 	}
 	if cid1.String() != cid2.String() {
 		t.Errorf("CID mismatch: %s vs %s", cid1, cid2)

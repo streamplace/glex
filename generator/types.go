@@ -255,11 +255,13 @@ func (gen *CodeGenerator) writeCBORAdapter(name string, hasType bool, typeConst 
 		fmt.Fprintf(gen.Out, "func (t *%s) RecordTypeID() string { return %q }\n\n", name, typeConst)
 	}
 	if hasType && stampJSON {
-		fmt.Fprintf(gen.Out, "// MarshalJSON stamps the $type field, like MarshalCBOR does.\n")
-		fmt.Fprintf(gen.Out, "func (t *%s) MarshalJSON() ([]byte, error) {\n", name)
+		fmt.Fprintf(gen.Out, "// MarshalJSON stamps the $type field, like MarshalCBOR does. The value\n")
+		fmt.Fprintf(gen.Out, "// receiver operates on a copy, so the record is never mutated and both\n")
+		fmt.Fprintf(gen.Out, "// %s and *%s marshal with $type.\n", name, name)
+		fmt.Fprintf(gen.Out, "func (t %s) MarshalJSON() ([]byte, error) {\n", name)
 		fmt.Fprintf(gen.Out, "\tt.LexiconTypeID = %q\n", typeConst)
 		fmt.Fprintf(gen.Out, "\ttype alias %s\n", name)
-		fmt.Fprintf(gen.Out, "\treturn json.Marshal((*alias)(t))\n")
+		fmt.Fprintf(gen.Out, "\treturn json.Marshal((alias)(t))\n")
 		fmt.Fprintf(gen.Out, "}\n\n")
 	}
 	fmt.Fprintf(gen.Out, "func (t *%s) MarshalCBOR(w io.Writer) error {\n", name)
@@ -268,9 +270,13 @@ func (gen *CodeGenerator) writeCBORAdapter(name string, hasType bool, typeConst 
 	fmt.Fprintf(gen.Out, "\t\treturn err\n")
 	fmt.Fprintf(gen.Out, "\t}\n")
 	if hasType {
-		fmt.Fprintf(gen.Out, "\tt.LexiconTypeID = %q\n", typeConst)
+		fmt.Fprintf(gen.Out, "\t// stamp $type on a copy so marshal never mutates the record\n")
+		fmt.Fprintf(gen.Out, "\tcp := *t\n")
+		fmt.Fprintf(gen.Out, "\tcp.LexiconTypeID = %q\n", typeConst)
+		fmt.Fprintf(gen.Out, "\treturn %s.MarshalCBOR(w, &cp)\n", rt)
+	} else {
+		fmt.Fprintf(gen.Out, "\treturn %s.MarshalCBOR(w, t)\n", rt)
 	}
-	fmt.Fprintf(gen.Out, "\treturn %s.MarshalCBOR(w, t)\n", rt)
 	fmt.Fprintf(gen.Out, "}\n\n")
 
 	fmt.Fprintf(gen.Out, "func (t *%s) UnmarshalCBOR(r io.Reader) error {\n", name)
