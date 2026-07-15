@@ -63,6 +63,15 @@ func main() {
 						Usage: "generate server handler stubs (stubs.go) into the given package name (e.g. spxrpc)",
 					},
 					&cli.BoolFlag{
+						Name:  "no-install",
+						Usage: "skip installing lexicons from lexicons.json before building",
+					},
+					&cli.StringFlag{
+						Name:  "manifest",
+						Value: "./lexicons.json",
+						Usage: "path to the lexicons.json manifest used by the pre-build install",
+					},
+					&cli.BoolFlag{
 						Name:    "verbose",
 						Aliases: []string{"v"},
 						Usage:   "print each generated lexicon (default: one summary line; failures always print)",
@@ -128,6 +137,27 @@ func runInstall(ctx context.Context, cmd *cli.Command) error {
 }
 
 func runBuild(ctx context.Context, cmd *cli.Command) error {
+	// Install lexicons from the manifest first (mirroring @atproto/lex, whose
+	// build runs an install unless told not to), so a fresh clone can run
+	// `glex build` without a separate install step. When all vendored files
+	// already match the manifest this touches nothing and makes no network
+	// requests. Projects without a lexicons.json skip this entirely.
+	if !cmd.Bool("no-install") {
+		manifest := cmd.String("manifest")
+		if _, err := os.Stat(manifest); err == nil {
+			err := installer.Install(ctx, installer.Options{
+				Manifest: manifest,
+				Lexicons: cmd.String("lexicons-dir"),
+				Log: func(format string, args ...any) {
+					fmt.Printf(format+"\n", args...)
+				},
+			})
+			if err != nil {
+				return fmt.Errorf("pre-build lexicon install failed (use --no-install to skip): %w", err)
+			}
+		}
+	}
+
 	// enumerate lexicon JSON file paths
 	filePaths, err := collectPaths(cmd)
 	if err != nil {
