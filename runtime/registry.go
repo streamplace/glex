@@ -52,7 +52,13 @@ var (
 // RegisterType registers a lexicon type ID (the $type string) to a concrete Go
 // type. The val argument must be a pointer to a zero value of the type (e.g.,
 // &Foo{}); RegisterType records the element type. Generated code calls this
-// from init() functions. Panics on duplicate registration of the same ID.
+// from init() functions.
+//
+// Registering the same lexicon twice is idempotent, even when the two
+// registrations are structurally identical types generated into different
+// packages (e.g. two libraries that each vendored the same lexicon) — the
+// first registration wins. Only registering two structurally DIFFERENT
+// definitions for the same ID panics.
 func RegisterType(id string, val Record) {
 	t := reflect.TypeOf(val)
 	if t.Kind() == reflect.Ptr {
@@ -60,10 +66,72 @@ func RegisterType(id string, val Record) {
 	}
 	registryMu.Lock()
 	defer registryMu.Unlock()
-	if existing, ok := typeRegistry[id]; ok && existing != t {
-		panic(fmt.Sprintf("glex: duplicate type registration for %q (existing %s, new %s)", id, existing, t))
+	if existing, ok := typeRegistry[id]; ok {
+		if existing == t || structurallyEqual(existing, t) {
+			return
+		}
+		panic(fmt.Sprintf("glex: conflicting type registration for %q (existing %s, new %s)", id, existing, t))
 	}
 	typeRegistry[id] = t
+}
+
+// structurallyEqual reports whether two types have the same shape — same
+// kinds, and for structs the same field names, tags, and (recursively) field
+// types — ignoring type names and package paths. This is how two generated
+// copies of the same lexicon in different packages are recognized as the same
+// definition.
+func structurallyEqual(a, b reflect.Type) bool {
+	seen := map[[2]reflect.Type]bool{}
+	var eq func(a, b reflect.Type) bool
+	eq = func(a, b reflect.Type) bool {
+		if a == b {
+			return true
+		}
+		if a.Kind() != b.Kind() {
+			return false
+		}
+		key := [2]reflect.Type{a, b}
+		if seen[key] {
+			// Already comparing this pair further up the stack (recursive
+			// type); assume equal here — any real difference is caught at
+			// the point of divergence.
+			return true
+		}
+		seen[key] = true
+		switch a.Kind() {
+		case reflect.Struct:
+			if a.NumField() != b.NumField() {
+				return false
+			}
+			for i := 0; i < a.NumField(); i++ {
+				fa, fb := a.Field(i), b.Field(i)
+				if fa.Name != fb.Name || fa.Tag != fb.Tag || !eq(fa.Type, fb.Type) {
+					return false
+				}
+			}
+			return true
+		case reflect.Ptr, reflect.Slice:
+			return eq(a.Elem(), b.Elem())
+		case reflect.Array:
+			return a.Len() == b.Len() && eq(a.Elem(), b.Elem())
+		case reflect.Map:
+			return eq(a.Key(), b.Key()) && eq(a.Elem(), b.Elem())
+		case reflect.Interface:
+			if a.NumMethod() != b.NumMethod() {
+				return false
+			}
+			for i := 0; i < a.NumMethod(); i++ {
+				if a.Method(i).Name != b.Method(i).Name {
+					return false
+				}
+			}
+			return true
+		default:
+			// Same basic kind (string, int64, bool, ...).
+			return true
+		}
+	}
+	return eq(a, b)
 }
 
 // NewFromType allocates a new zero-value pointer for the type registered under
