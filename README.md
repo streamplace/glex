@@ -1,254 +1,139 @@
 # glex
 
-> A Go code generator for [AT Protocol](https://atproto.com) Lexicons — read
-> Lexicon schemas, emit idiomatic Go types + XRPC clients, serialize as
-> canonical DAG-CBOR via [go-dasl](https://github.com/hyphacoop/go-dasl).
-> **No `cbor_gen.go`, no `sed`, no bootstrap cycle.**
+Go codegen for [AT Protocol](https://atproto.com) Lexicons. Vendor lexicon
+schemas from the network, generate idiomatic Go types and XRPC clients, and
+serialize them as canonical DAG-CBOR — the Go equivalent of Bluesky's
+TypeScript [`@atproto/lex`] tool.
 
-glex is the Go equivalent of Bluesky's TypeScript
-[`@atproto/lex`](https://github.com/bluesky-social/atproto/tree/main/packages/lex)
-tool. It reads Lexicon JSON schemas and emits Go source files: struct types for
-records and objects, union types with `$type` dispatch, and XRPC client
-functions for queries and procedures.
+[`@atproto/lex`]: https://github.com/bluesky-social/atproto/tree/main/packages/lex
 
-The killer feature: **go-dasl does CBOR by runtime reflection**, so generated
-structs need only correct `json:` struct tags — there's no per-type marshal
-codegen. Each generated struct gets a thin `MarshalCBOR`/`UnmarshalCBOR`
-adapter that delegates to go-dasl, producing byte-for-byte identical canonical
-DAG-CBOR to indigo's `cbor-gen` output. CIDs are stable; migrations are safe.
-
-## Lineage
-
-glex builds on two existing projects:
-
-- **[go-dasl](https://github.com/hyphacoop/go-dasl)** (hyphacoop) — canonical
-  DAG-CBOR by reflection. The heavy lifting is theirs.
-- **[indigo](https://github.com/bluesky-social/indigo)** `lex/lexgen`
-  (bnewbold, MIT) — the generator skeleton (schema parser, flattener, codegen
-  structure).
-
-glex's value-add: the go-dasl codegen profile, the adapter pattern, a
-self-contained runtime (no indigo `lexutil` dependency), and packaging it as a
-real CLI tool.
-
-## Installation
+## Install
 
 ```sh
 go install github.com/streamplace/glex/cmd/glex@latest
 ```
 
-Or build from source:
+## Getting started
+
+Vendor the lexicons your project uses. This resolves each NSID over the
+network (with cryptographic proof verification), writes the schema documents
+under `./lexicons/`, records CID-pinned resolutions in a `lexicons.json`
+lockfile, and pulls in referenced lexicons recursively:
 
 ```sh
-git clone https://github.com/streamplace/glex
-cd glex
-go build ./cmd/glex
+glex install app.bsky.feed.post
 ```
 
-## Usage
+Then generate Go packages from them:
 
 ```sh
-# Generate Go types from lexicon JSON files
-glex build --lexicons-dir ./lexicons --output-dir ./gen
-
-# With explicit runtime import path
-glex build --lexicons-dir ./lexicons --output-dir ./gen \
-  --runtime-import github.com/myorg/myproject/glex
-
-# Legacy mode (indigo lexutil-compatible, for migration)
-glex build --lexicons-dir ./lexicons --output-dir ./gen --legacy-mode
+glex build --module-path github.com/you/yourproject/pkg --output-dir ./pkg
 ```
 
-### Flags
+`glex build` re-runs the install from `lexicons.json` first (a no-op with no
+network traffic when the vendored files are present), so a fresh clone of your
+repo only ever needs `glex build`. Commit `lexicons/`, `lexicons.json`, and
+the generated packages.
+
+For `app.bsky.feed.post` this produces `pkg/appbsky/feedpost.go` with a `FeedPost`
+struct, plus a package per referenced namespace. Using the generated types:
+
+```go
+import (
+    glex "github.com/streamplace/glex/runtime"
+    "github.com/you/yourproject/pkg/appbsky"
+)
+
+// Encode: $type is stamped automatically, for both JSON and CBOR.
+post := &appbsky.FeedPost{Text: "hello", CreatedAt: "2024-01-01T00:00:00Z"}
+b, err := json.Marshal(post)
+
+// Decode when you know what the bytes must be — wrong $type is a hard error:
+post, err := glex.CborDecodeAs[appbsky.FeedPost](recordBytes)
+
+// Decode by $type when you don't (e.g. firehose records):
+rec, err := glex.CborDecodeValue(recordBytes)
+switch rec := rec.(type) {
+case *appbsky.FeedPost:
+    fmt.Println(rec.Text)
+}
+```
+
+## CLI reference
+
+### `glex build`
+
+Generates Go source from the vendored lexicon JSON files.
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--lexicons-dir` | `lexicons/` | Directory containing lexicon JSON files (recursive) |
-| `--output-dir` / `--out` | `./codegen-output/` | Output directory for generated packages |
-| `--runtime-import` | `github.com/streamplace/glex/runtime` | Go import path of the glex runtime |
-| `--runtime-alias` | `glex` | Import alias used in generated code |
-| `--legacy-mode` | off | Use indigo `lexutil`-compatible profile (for migration) |
-| `--verbose` / `-v` | off | Print each generated lexicon (default: one summary line; failures always print) |
+| `--output-dir` / `--out` | `./pkg/` | Base directory for generated packages |
+| `--module-path` | | Go import path the generated packages live under (e.g. `github.com/you/yourproject/pkg`) |
+| `--manifest` | `./lexicons.json` | Manifest used by the pre-build install |
+| `--no-install` | off | Skip the pre-build install |
+| `--gen-server` | | Also generate server handler stubs into the given package name |
+| `--no-imports-tidy` | off | Skip goimports cleanup of the output |
+| `--verbose` / `-v` | off | Print each generated lexicon |
 
-## Installing lexicons (`glex install`)
+### `glex install`
 
-`glex install` vendors lexicon documents from the AT Protocol network, ported
-from `lex install` in [`@atproto/lex`]. It resolves each NSID's authority via
-its `_lexicon` DNS TXT record, fetches the `com.atproto.lexicon.schema` record
-from the authority's PDS with cryptographic proof verification (commit
-signature + MST inclusion), writes the documents under `./lexicons/`, and
-records every resolution (AT URI + CID) in a `lexicons.json` lockfile.
-Referenced lexicons are installed recursively.
-
-[`@atproto/lex`]: https://github.com/bluesky-social/atproto/tree/main/packages/lex/lex
+Vendors lexicon documents from the network and records them in
+`lexicons.json`. Output is byte-for-byte compatible with `@atproto/lex`'s
+`lex install`, so the two tools can be used interchangeably on the same
+repository.
 
 ```sh
-# Install a lexicon (and its dependencies) by NSID
-glex install app.bsky.feed.post
-
-# Pin a lexicon from a specific repository
-glex install at://did:plc:z72i7hdynmk6r22z27h6tvur/com.atproto.lexicon.schema/app.bsky.feed.post
-
-# Re-install everything from lexicons.json (uses vendored files, no re-fetch)
-glex install
-
-# Re-fetch the latest version of every installed lexicon
-glex install --update
-
-# Lockfile check for CI: error if lexicons.json is out of date
-glex install --ci
+glex install app.bsky.feed.post   # install an NSID (and its dependencies)
+glex install                      # re-install everything from lexicons.json
+glex install --update             # re-fetch the latest version of everything
+glex install --ci                 # lockfile check for CI
 ```
-
-The output is byte-for-byte identical to `lex install`'s — same JSON
-formatting, key order, and CIDs — so the two tools can be used
-interchangeably on the same repository (verified by
-`TestInstallParityWithAtprotoLex`, which runs both CLIs side by side).
-
-### Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--manifest` | `./lexicons.json` | Path to the lexicons.json manifest file |
+| `--manifest` | `./lexicons.json` | Path to the manifest file |
+| `--lexicons` | `./lexicons` | Directory lexicon JSON files are vendored into |
 | `--save` / `-s` | on | Update lexicons.json after installing (`--no-save` to disable) |
 | `--update` | off | Re-resolve and re-fetch all installed lexicons |
 | `--ci` | off | Error if installed lexicons don't match the manifest CIDs |
-| `--lexicons` | `./lexicons` | Directory containing vendored lexicon JSON files |
 
-## Generated output
-
-For a lexicon like `com.example.post` (a record with text, blob, and link
-fields), glex emits:
-
-```go
-// Code generated by glex; DO NOT EDIT.
-// Lexicon schema: com.example.post
-
-package comexample
-
-import (
-	"io"
-	glex "github.com/streamplace/glex/runtime"
-	cbg "github.com/whyrusleeping/cbor-gen"
-)
-
-func init() {
-	glex.RegisterType("com.example.post", &Post{})
-}
-
-type Post struct {
-	LexiconTypeID string      `json:"$type"`
-	Text          string      `json:"text"`
-	Image         *glex.Blob `json:"image,omitempty"`
-	ReplyTo       *Post       `json:"replyTo,omitempty"`
-	CreatedAt     string      `json:"createdAt"`
-}
-
-func (t *Post) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	t.LexiconTypeID = "com.example.post"
-	return glex.MarshalCBOR(w, t)
-}
-
-func (t *Post) UnmarshalCBOR(r io.Reader) error {
-	return glex.UnmarshalCBOR(r, t)
-}
-```
+Tip: generated files and the tool-formatted `lexicons.json` / `lexicons/`
+directories are best excluded from your formatter (e.g. `.prettierignore`) —
+the installers own their formatting.
 
 ## The runtime
 
-`glex/runtime` (package `glex`) provides:
+Generated code depends on `github.com/streamplace/glex/runtime` (package
+`glex`). The pieces you'll touch directly:
 
-- **Value types**: `Link` (CID link), `Blob` (blob reference), `Bytes` (byte
-  string) — go-dasl-native, byte-identical to indigo's `lexutil` equivalents.
-- **Adapter helpers**: `MarshalCBOR(io.Writer, v)` / `UnmarshalCBOR(io.Reader,
-  v)` — bridge between indigo's `cbg.CBORMarshaler` interface and go-dasl.
-- **`$type` registry**: `RegisterType`, `NewFromType`, `RegisteredTypes` —
-  runtime dispatch from `$type` strings to concrete Go types.
-- **The sealed `Record` interface**: every generated type implements
-  `RecordTypeID() string` with a *pointer* receiver, so only `*T` (never a
-  bare `T`) is a `Record`. Decode functions return `Record` instead of `any`,
-  which makes a wrong type assertion like `rec.(placestream.Livestream)` — a
-  value type, which can never come out of a decoder — a compile-time
-  "impossible type assertion" error instead of a silently-false `ok`.
-- **Decode-by-`$type`**: `CborDecodeValue([]byte)` / `JsonDecodeValue([]byte)`
-  — the firehose workhorse. Extracts `$type`, allocates the concrete type,
-  decodes, returns `Record`.
-- **Typed decode**: `DecodeCBOR(b, &rec)` / `DecodeJSON(b, &rec)` — preferred
-  when the caller knows what the record must be. Verifies the wire `$type`
-  against the target's `RecordTypeID()` before unmarshaling, so bytes of any
-  other type are a hard error (wrapping `ErrWrongType`) instead of a silently
-  zero-filled struct:
-
-  ```go
-  var ls placestream.Livestream
-  if err := glex.DecodeCBOR(recordBytes, &ls); err != nil { ... }
-  ```
-
-  `CborDecodeAs[T]` / `JsonDecodeAs[T]` are expression-shaped sugar over the
-  same checks, and `RecordAs[T]` does the equivalent for an already-decoded
-  `Record` (e.g. a `LexiconTypeDecoder.Val`):
-
-  ```go
-  ls, err := glex.CborDecodeAs[placestream.Livestream](recordBytes)
-  ```
-- **`LexiconTypeDecoder`**: open "unknown record" wrapper for view types and
-  `unknown` lexicon fields. Marshals with `$type` injection; unrecognized
-  types are preserved as `*RawRecord` so they still round-trip. To put a
-  **non-lexicon payload** (e.g. a DID document) into an `unknown` field, wrap
-  it with `Unknown` — it round-trips verbatim, no `$type` required:
-
-  ```go
-  didDoc, err := glex.Unknown(ident.DIDDocument())
-  out.DidDoc = didDoc
-  ```
-- **Union dispatch**: `TypeExtract` / `CborTypeExtract` /
-  `CborTypeExtractReader`.
-- **XRPC client**: `LexClient` interface, `Query` / `Procedure` constants.
-
-## Architecture
-
-The intended architecture for a consumer like Streamplace:
-
-> **glex-generated types + glex runtime for the data model; indigo for the
-> plumbing (repo/carstore/events/identity/atcrypto); thin conversion bridges
-> between them.**
-
-glex-generated types satisfy indigo's `cbg.CBORMarshaler` interface, so they
-drop straight into indigo's repo/MST/firehose plumbing while serializing
-through go-dasl.
-
-## Testing
-
-```sh
-# Runtime tests (byte-compatibility with indigo's cbor-gen, registry, decoder)
-go test ./runtime/
-
-# Golden-file tests (fixture lexicons → expected .go output)
-go test ./cmd/glex/
-
-# Round-trip + CID-stability suite (marshal → decode-by-$type → re-marshal)
-go test ./testdata/gentest/
-
-# Update golden files after generator changes
-go test ./cmd/glex/ -update
-```
+- **Typed decode** — `glex.DecodeCBOR(b, &rec)` / `glex.DecodeJSON(b, &rec)`,
+  or the expression-shaped `glex.CborDecodeAs[T](b)` / `glex.JsonDecodeAs[T](b)`.
+  The wire `$type` is verified against the target type; a mismatch is a hard
+  error, never a silently zero-filled struct.
+- **Decode by `$type`** — `glex.CborDecodeValue(b)` / `glex.JsonDecodeValue(b)`
+  dispatch through the type registry and return a `glex.Record`. Only pointers
+  to generated types satisfy `Record`, so a wrong value-type assertion is a
+  compile error. `glex.RecordAs[T](rec)` converts a `Record` with the same
+  hard-error semantics.
+- **Value types** — `glex.Link` (CID link), `glex.Blob` (blob reference),
+  `glex.Bytes` (byte string).
+- **Unions** — generated as one struct per union with a pointer field per
+  variant; exactly one should be set. An unrecognized variant decodes into the
+  union's `Raw` field and re-encodes verbatim, so unknown data round-trips
+  losslessly.
+- **`unknown` fields** — generated as `*glex.LexiconTypeDecoder`. To put a
+  non-lexicon payload (e.g. a DID document) in one: `glex.Unknown(v)`.
+- **CIDs** — `glex.CidForRecord(rec)` computes the canonical record CID
+  (stamping `$type` the same way marshaling does).
 
 ## Status
 
-glex is pre-1.0 and under active development. The runtime, generator, CLI, and
-test suite are working. The immediate roadmap:
-
-- [x] Self-contained runtime on go-dasl (registry, decoder, value types)
-- [x] Config-driven generator (no hardcoded Streamplace specifics)
-- [x] CLI (`glex build`) with golden-file + round-trip tests
-- [ ] Generate base atproto namespaces (`com.atproto.*`, `app.bsky.*`) locally
-- [ ] Subscription/event message types
-- [ ] Real XRPC client implementation (not just the interface)
-- [ ] Server-handler generator (optional)
+glex is pre-1.0 and under active development: the runtime, generator,
+installer, and CLI are in production use, while subscription message types and
+the standalone XRPC client are still in progress.
 
 ## License
 
-MIT
+MIT. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and project
+lineage.
