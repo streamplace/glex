@@ -29,6 +29,10 @@ func (lb Bytes) MarshalJSON() ([]byte, error) {
 }
 
 func (lb *Bytes) UnmarshalJSON(raw []byte) error {
+	if string(raw) == "null" {
+		// Match encoding/json convention: unmarshaling null is a no-op.
+		return nil
+	}
 	var jb jsonBytes
 	if err := json.Unmarshal(raw, &jb); err != nil {
 		return xerrors.Errorf("parsing $bytes JSON: %v", err)
@@ -53,6 +57,10 @@ func (lb Bytes) MarshalCBOR() ([]byte, error) {
 
 // UnmarshalCBOR implements go-dasl's Unmarshaler.
 func (lb *Bytes) UnmarshalCBOR(b []byte) error {
+	if len(b) == 1 && b[0] == 0xf6 {
+		// CBOR null: no-op, matching the JSON convention.
+		return nil
+	}
 	out, err := cbg.ReadByteArray(cbg.NewCborReader(bytes.NewReader(b)), MaxByteArraySize)
 	if err != nil {
 		return xerrors.Errorf("failed to read $bytes from CBOR: %w", err)

@@ -42,6 +42,10 @@ func (l Link) MarshalJSON() ([]byte, error) {
 }
 
 func (l *Link) UnmarshalJSON(raw []byte) error {
+	if string(raw) == "null" {
+		// Match encoding/json convention: unmarshaling null is a no-op.
+		return nil
+	}
 	var jl jsonLink
 	if err := json.Unmarshal(raw, &jl); err != nil {
 		return xerrors.Errorf("parsing cid-link JSON: %v", err)
@@ -70,6 +74,10 @@ func (l Link) MarshalCBOR() ([]byte, error) {
 
 // UnmarshalCBOR implements go-dasl's Unmarshaler.
 func (l *Link) UnmarshalCBOR(b []byte) error {
+	if len(b) == 1 && b[0] == 0xf6 {
+		// CBOR null: no-op, matching the JSON convention.
+		return nil
+	}
 	c, err := cbg.ReadCid(cbg.NewCborReader(bytes.NewReader(b)))
 	if err != nil {
 		return xerrors.Errorf("failed to read cid-link from CBOR: %w", err)

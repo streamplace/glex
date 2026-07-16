@@ -205,6 +205,10 @@ type LexiconTypeDecoder struct {
 
 // UnmarshalJSON implements json.Unmarshaler.
 func (ltd *LexiconTypeDecoder) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		// Match encoding/json convention: unmarshaling null is a no-op.
+		return nil
+	}
 	val, err := JsonDecodeValue(b)
 	if err != nil {
 		if xerrors.Is(err, ErrUnrecognizedType) {
@@ -238,6 +242,10 @@ func (ltd *LexiconTypeDecoder) MarshalJSON() ([]byte, error) {
 
 // UnmarshalCBOR implements go-dasl's Unmarshaler.
 func (ltd *LexiconTypeDecoder) UnmarshalCBOR(b []byte) error {
+	if len(b) == 1 && b[0] == 0xf6 {
+		// CBOR null: no-op, matching the JSON convention.
+		return nil
+	}
 	val, err := CborDecodeValue(b)
 	if err != nil {
 		if xerrors.Is(err, ErrUnrecognizedType) {
