@@ -288,7 +288,11 @@ func (gen *CodeGenerator) writeRPCHandler(pf func(string, ...any), fl *FlatLexic
 		case "application/json":
 			pf("\treturn c.JSON(200, out)\n}\n\n")
 		default:
-			pf("\treturn c.Stream(200, \"application/octet-stream\", out)\n}\n\n")
+			enc := output.Encoding
+			if enc == "" || enc == "*/*" {
+				enc = "application/octet-stream"
+			}
+			pf("\treturn c.Stream(200, %q, out)\n}\n\n", enc)
 		}
 	} else {
 		pf("\treturn nil\n}\n\n")
