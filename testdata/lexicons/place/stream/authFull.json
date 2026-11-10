@@ -1,0 +1,32 @@
+{
+  "lexicon": 1,
+  "id": "place.stream.authFull",
+  "defs": {
+    "main": {
+      "type": "permission-set",
+      "title": "Full Streamplace Access",
+      "detail": "Full access to all Streamplace features and data.",
+      "permissions": [
+        {
+          "type": "permission",
+          "resource": "repo",
+          "collection": [
+            "place.stream.multistream.target"
+          ]
+        },
+        {
+          "type": "permission",
+          "resource": "space",
+          "spaceType": "place.stream.personal",
+          "authority": "self",
+          "skey": "*",
+          "collection": [
+            "place.stream.multistream.target"
+          ],
+          "action": ["read", "create", "update", "delete"],
+          "manage": ["create"]
+        }
+      ]
+    }
+  }
+}

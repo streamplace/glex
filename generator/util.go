@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/bluesky-social/indigo/atproto/lexicon"
 	"github.com/bluesky-social/indigo/atproto/syntax"
+	"github.com/streamplace/glex/lexicon"
 )
 
 func defType(sd *lexicon.SchemaDef) (string, error) {
@@ -23,6 +23,8 @@ func defType(sd *lexicon.SchemaDef) (string, error) {
 		return "permission-set", nil
 	case lexicon.SchemaPermission:
 		return "permission", nil
+	case lexicon.SchemaSpace:
+		return "space", nil
 	case lexicon.SchemaBoolean:
 		return "boolean", nil
 	case lexicon.SchemaInteger:
@@ -69,6 +71,8 @@ func defDescription(sd *lexicon.SchemaDef) string {
 	case lexicon.SchemaPermissionSet:
 		desc = v.Description
 	case lexicon.SchemaPermission:
+		desc = v.Description
+	case lexicon.SchemaSpace:
 		desc = v.Description
 	case lexicon.SchemaBoolean:
 		desc = v.Description
