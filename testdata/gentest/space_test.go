@@ -159,4 +159,41 @@ func TestSpaceRecordCBOR(t *testing.T) {
 	if decoded["$type"] != "com.atproto.space.putRecord" {
 		t.Errorf("$type: got %v", decoded["$type"])
 	}
+
+	// Decode back into the generated input type and verify the nested unknown
+	// record survives, not just the top-level fields.
+	var decodedIn comatproto.SpacePutRecord_Input
+	if err := glex.UnmarshalCBORBytes(buf.Bytes(), &decodedIn); err != nil {
+		t.Fatalf("UnmarshalCBORBytes: %v", err)
+	}
+	if decodedIn.Space != in.Space || decodedIn.Repo != in.Repo ||
+		decodedIn.Collection != in.Collection || decodedIn.Rkey != in.Rkey {
+		t.Errorf("round-trip input fields: %#v", decodedIn)
+	}
+	if decodedIn.Record == nil {
+		t.Fatal("round-trip dropped the nested record")
+	}
+	rawRec, ok := decodedIn.Record.Val.(*glex.RawRecord)
+	if !ok {
+		t.Fatalf("nested record value is %T, want *glex.RawRecord", decodedIn.Record.Val)
+	}
+	if rawRec.Type != "place.stream.multistream.target" || rawRec.Encoding != "cbor" {
+		t.Errorf("nested record identity: type=%q encoding=%q", rawRec.Type, rawRec.Encoding)
+	}
+	var recordDoc map[string]any
+	if err := drisl.Unmarshal(rawRec.Bytes, &recordDoc); err != nil {
+		t.Fatalf("decode nested record: %v", err)
+	}
+	if recordDoc["url"] != "rtmp://example.com/live" {
+		t.Errorf("nested record url: got %v", recordDoc["url"])
+	}
+
+	// Re-encoding the decoded value must be byte-identical (stable CID).
+	var roundTrip bytes.Buffer
+	if err := decodedIn.MarshalCBOR(&roundTrip); err != nil {
+		t.Fatalf("re-marshal: %v", err)
+	}
+	if !bytes.Equal(buf.Bytes(), roundTrip.Bytes()) {
+		t.Errorf("re-marshal not byte-identical\n first: %x\nsecond: %x", buf.Bytes(), roundTrip.Bytes())
+	}
 }
