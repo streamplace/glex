@@ -127,7 +127,7 @@ lexicon files can use one parser.
 
 The `com.atproto.space.*` alpha lexicons are not published under
 `_lexicon.atproto.com` yet; until they are, vendor their JSON files directly
-(or install them by `at://` URI) rather than by NSID.
+rather than installing them by NSID.
 
 [spaces]: https://github.com/bluesky-social/proposals/tree/main/0016-permissioned-data
 
