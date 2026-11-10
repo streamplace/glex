@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/bluesky-social/indigo/atproto/lexicon"
 	"github.com/bluesky-social/indigo/atproto/syntax"
+	"github.com/streamplace/glex/lexicon"
 )
 
 // GenConfig configures the code generator output.
@@ -91,13 +91,13 @@ func (gen *CodeGenerator) regAlias() string {
 
 func (gen *CodeGenerator) deps() map[string]bool {
 	d := map[string]bool{
-		"\"context\"":                        true,
-		"\"fmt\"":                            true,
-		"\"io\"":                             true,
-		"\"bytes\"":                          true,
-		"\"encoding/json\"":                  true,
+		"\"context\"":       true,
+		"\"fmt\"":           true,
+		"\"io\"":            true,
+		"\"bytes\"":         true,
+		"\"encoding/json\"": true,
 		"glex \"github.com/streamplace/glex/runtime\"": true,
-		"cbg \"github.com/whyrusleeping/cbor-gen\"":     true,
+		"cbg \"github.com/whyrusleeping/cbor-gen\"":    true,
 	}
 
 	for ext := range gen.Lex.ExternalRefs {
@@ -155,8 +155,9 @@ func (gen *CodeGenerator) WriteType(ft *FlatType) error {
 		return gen.writeEndpoint(ft, defDescription(ft.Schema), v.Parameters, v.Output, v.Input, true)
 	case lexicon.SchemaSubscription:
 		// pass; we only generate message types, not overall subscription
-	case lexicon.SchemaPermissionSet, lexicon.SchemaPermission:
-		// pass for Go codegen
+	case lexicon.SchemaPermissionSet, lexicon.SchemaPermission, lexicon.SchemaSpace:
+		// pass for Go codegen: permission sets, permissions, and space
+		// declarations are authorization metadata, not data types.
 	case lexicon.SchemaToken:
 		// TODO: pass for now; could be a var/const?
 	case lexicon.SchemaString, lexicon.SchemaInteger, lexicon.SchemaBoolean, lexicon.SchemaUnknown:

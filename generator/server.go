@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bluesky-social/indigo/atproto/lexicon"
 	"github.com/bluesky-social/indigo/atproto/syntax"
+	"github.com/streamplace/glex/lexicon"
 )
 
 // WriteServerStubs generates Echo HTTP handler stubs for all XRPC query and

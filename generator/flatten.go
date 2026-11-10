@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bluesky-social/indigo/atproto/lexicon"
 	"github.com/bluesky-social/indigo/atproto/syntax"
+	"github.com/streamplace/glex/lexicon"
 )
 
 // Intermediate representation of a complete lexicon schema file, containing one or more definitions.
@@ -178,8 +178,8 @@ func (fl *FlatLexicon) flattenType(fd *FlatDef, tpath []string, def *lexicon.Sch
 	case lexicon.SchemaToken:
 		// pass-through (emit)
 		fl.Types = append(fl.Types, ft)
-	case lexicon.SchemaPermissionSet, lexicon.SchemaPermission:
-		// pass-through (emit)
+	case lexicon.SchemaPermissionSet, lexicon.SchemaPermission, lexicon.SchemaSpace:
+		// pass-through (emit); none of these produce Go types
 		fl.Types = append(fl.Types, ft)
 	default:
 		return fmt.Errorf("unsupported def type for flattening (%s): %T", fd.Name, def.Inner)

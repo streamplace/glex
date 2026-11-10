@@ -164,23 +164,48 @@ func defRefs(def *orderedMap) ([]string, error) {
 			}
 		}
 		return out, nil
-	case "permission":
-		resource, _ := def.getString("resource")
-		var field string
-		switch resource {
-		case "rpc":
-			field = "lxm"
-		case "repo":
-			field = "collection"
-		default:
-			return nil, nil
-		}
+	case "space":
+		// A space declaration depends on the collections it declares.
 		var out []string
-		if v, ok := def.get(field); ok {
+		if v, ok := def.get("collections"); ok {
 			if arr, ok := v.([]any); ok {
 				for _, item := range arr {
 					if s, ok := item.(string); ok {
 						out = append(out, s)
+					}
+				}
+			}
+		}
+		return out, nil
+	case "permission":
+		resource, _ := def.getString("resource")
+		var fields []string
+		switch resource {
+		case "rpc":
+			fields = []string{"lxm"}
+		case "repo":
+			fields = []string{"collection"}
+		case "space":
+			// A space permission depends on the space type declaration and
+			// the collections it references.
+			fields = []string{"spaceType", "collection"}
+		default:
+			return nil, nil
+		}
+		var out []string
+		for _, field := range fields {
+			if v, ok := def.get(field); ok {
+				switch val := v.(type) {
+				case string:
+					// spaceType is a scalar; lxm/collection are arrays.
+					if val != "*" {
+						out = append(out, val)
+					}
+				case []any:
+					for _, item := range val {
+						if s, ok := item.(string); ok && s != "*" {
+							out = append(out, s)
+						}
 					}
 				}
 			}

@@ -14,18 +14,23 @@ system Go is older.
 
 ## Architecture overview
 
-glex has three components:
+glex has four components:
 
 1. **`runtime/`** (package `glex`) — the runtime support library. Value
    types (Link, Blob, Bytes), adapter helpers, `$type` registry, decode
    machinery, XRPC client interface. Depends on go-dasl for CBOR and
    whyrusleeping/cbor-gen only for low-level CID/byte-string primitives.
 
-2. **`generator/`** (package `lexgen`) — the code generator. A fork of
+2. **`lexicon/`** (package `lexicon`) — the Lexicon schema parser and
+   validator, derived from indigo's `atproto/lexicon` (MIT) plus the
+   permissioned-data additions (`space` defs, `space-ref`, space
+   permissions). Exported so downstream projects can share the parser.
+
+3. **`generator/`** (package `lexgen`) — the code generator. A fork of
    indigo's `lex/lexgen` with a go-dasl profile. Reads lexicon JSON, emits Go
    source. Configurable via `GenConfig`.
 
-3. **`cmd/glex/`** — the CLI. `glex build` reads lexicons and writes `.go`
+4. **`cmd/glex/`** — the CLI. `glex build` reads lexicons and writes `.go`
    files.
 
 ## Testing changes

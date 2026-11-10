@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bluesky-social/indigo/atproto/lexicon"
 	"github.com/bluesky-social/indigo/atproto/syntax"
+	"github.com/streamplace/glex/lexicon"
 )
 
 func (gen *CodeGenerator) fieldType(fname string, def *lexicon.SchemaDef, optional bool) (string, error) {

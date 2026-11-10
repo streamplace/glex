@@ -102,6 +102,35 @@ Tip: generated files and the tool-formatted `lexicons.json` / `lexicons/`
 directories are best excluded from your formatter (e.g. `.prettierignore`) —
 the installers own their formatting.
 
+## Spaces (permissioned data)
+
+glex parses the [permissioned-data proposal (0016)][spaces] lexicon
+additions:
+
+- `"type": "space"` declarations, including `key`, `name`, `name:lang`, and
+  `collections`;
+- the `space-ref` string format; and
+- `"resource": "space"` permissions, including `spaceType`, `authority`,
+  `skey`, `collection`, `action`, and `manage`.
+
+Space declarations and permission sets are authorization metadata, not data
+records, so `glex build` validates them and emits no Go types — the same
+treatment permission sets already received. XRPC methods that use `space-ref`
+(for example `com.atproto.space.createSpace`, `putRecord`, and `deleteRecord`)
+generate ordinary Go bindings. `glex install` follows space declarations and
+space permissions when resolving dependencies.
+
+The parser is `github.com/streamplace/glex/lexicon`, a copy of indigo's
+`atproto/lexicon` targeted at the spaces alpha (see the package docs for the
+exact divergences and lineage). It is exported so consumers that parse the same
+lexicon files can use one parser.
+
+The `com.atproto.space.*` alpha lexicons are not published under
+`_lexicon.atproto.com` yet; until they are, vendor their JSON files directly
+rather than installing them by NSID.
+
+[spaces]: https://github.com/bluesky-social/proposals/tree/main/0016-permissioned-data
+
 ## The runtime
 
 Generated code depends on `github.com/streamplace/glex/runtime` (package

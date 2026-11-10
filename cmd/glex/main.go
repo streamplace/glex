@@ -17,9 +17,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bluesky-social/indigo/atproto/lexicon"
 	lexgen "github.com/streamplace/glex/generator"
 	"github.com/streamplace/glex/installer"
+	"github.com/streamplace/glex/lexicon"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/tools/imports"
 )
